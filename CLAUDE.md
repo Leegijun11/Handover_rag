@@ -21,12 +21,12 @@ Three people are building this in parallel against the frozen specs in `guidelin
 ## Source-of-truth documents (read before implementing)
 
 - `guidelines/0_목적_사용법.md` — how to use these docs; **data model, API spec, tech stack, and folder structure are frozen and may only be changed by 조장** — do not improvise around them.
-- `guidelines/1_시스템_개요.md` — system overview: user types, screen layout, module responsibilities, storage split, and the cross-layer rules in §1-5/§1-7 (chatbot only searches the newcomer's *assigned* document; failed answers never mention "we'll improve the docs"; checklist completion is an unverified self-check by design, used as a report signal).
+- `guidelines/1_시스템_개요.md` — system overview: user types, screen layout, module responsibilities, storage split, the cross-layer rules in §1-5/§1-7 (chatbot only searches the newcomer's *assigned* document; failed answers never mention "we'll improve the docs"; checklist completion is an unverified self-check by design, used as a report signal), and §1-8's seeded demo mode (3 pre-seeded companies, reachable without registering, for judges/voters).
 - `guidelines/2_공통_데이터_모델.md` — the exact Pydantic models (`User`, `Assignment`, `DocumentChapter`, `DocumentChunk`, `ChatLog`, `ChecklistItem`, `AdaptationReport`, `ReportSection`) and their field names/types. Every module exchanges data using these; do not rename or add fields. `User` includes `email`/`password_hash` — never return `password_hash` in an API response.
 - `guidelines/3_API_명세.md` — exact endpoints, request/response shapes, the common error format `{"error": true, "message": "..."}`, and the auth rules in §3-9 (every endpoint except `/user/register`/`/user/login` requires a `Bearer` token; the server verifies the token's `user_id`/`role` against the identity fields in the request, it doesn't just trust them).
 - `guidelines/4_프롬프트_브리프.md` — per-owner requirement briefs (copy-paste ready); §4-1's chatbot/report/draft requirements are the most detailed spec for RAG behavior and report signal definitions.
 - `guidelines/5_기술스택_폴더구조.md` — tech stack, the frozen folder layout, `main.py` router-registration pattern, env var names, HTTP status code mapping, git branch strategy, deployment plan (Vercel + Railway), and §5-9's cost/traffic defenses (rate limiting, request size caps, OpenAI billing hard limit).
-- `guidelines/6_통합_체크포인트.md` — integration schedule, the 9-step end-to-end test scenario (§6-3) that must pass before submission, and §6-5's explicit "not in 1차, revisit after 예선" list (email verification, password reset, refresh tokens) — don't implement those without checking with 조장 first.
+- `guidelines/6_통합_체크포인트.md` — integration schedule, the 9-step end-to-end test scenario (§6-3) that must pass before submission, §6-5's explicit "not in 1차, revisit after 예선" list (email verification, password reset, refresh tokens) — don't implement those without checking with 조장 first — and §6-6's demo-seeding plan (`backend/scripts/seed_demo.py`, run once before the 9/18 deploy).
 
 ## Architecture (once implemented, per the frozen spec)
 
@@ -47,6 +47,8 @@ Three people are building this in parallel against the frozen specs in `guidelin
 **Auth**: login (`POST /user/login`) issues a JWT; the frontend sends it as `Authorization: Bearer <token>` on every other request. Every router-level handler (other than register/login) depends on `core.auth.get_current_user` and must check that the token's `user_id`/`role` matches the identity fields in the request body/query — the request still carries `newcomer_id`/`mentor_id` as before (schemas are unchanged), but those values are no longer trusted at face value. Email verification is explicitly out of scope for 1차 (§6-5) — `email` exists only as a unique login identifier.
 
 **Cost defense**: `/chat/ask`, `/checklist/draft`, `/report/generate` call OpenAI directly and are rate-limited both per-`user_id` and per-IP (guidelines §5-9) — per-user alone isn't enough since account creation has no email verification gate. Cap `max_tokens` on every OpenAI call.
+
+**Document input**: `/document/upload` accepts either `file` (auto-parsed into chapters) or a pre-structured `chapters: list[{title, content}]` (from the mentor's "직접 입력" form — no auto-parsing, saved as-is). Both paths still run per-chapter chunking/embedding into `DocumentChunk`; the chunk-size heuristic itself stays 팀원 A's discretion regardless of input path (guidelines §3-2, §4-2).
 
 ## Commands (once the skeleton exists)
 
