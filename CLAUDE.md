@@ -22,11 +22,11 @@ Three people are building this in parallel against the frozen specs in `guidelin
 
 - `guidelines/0_목적_사용법.md` — how to use these docs; **data model, API spec, tech stack, and folder structure are frozen and may only be changed by 조장** — do not improvise around them.
 - `guidelines/1_시스템_개요.md` — system overview: user types, screen layout, module responsibilities, storage split, and the cross-layer rules in §1-5/§1-7 (chatbot only searches the newcomer's *assigned* document; failed answers never mention "we'll improve the docs"; checklist completion is an unverified self-check by design, used as a report signal).
-- `guidelines/2_공통_데이터_모델.md` — the exact Pydantic models (`User`, `Assignment`, `DocumentChapter`, `DocumentChunk`, `ChatLog`, `ChecklistItem`, `AdaptationReport`, `ReportSection`) and their field names/types. Every module exchanges data using these; do not rename or add fields.
-- `guidelines/3_API_명세.md` — exact endpoints, request/response shapes, and the common error format `{"error": true, "message": "..."}`.
+- `guidelines/2_공통_데이터_모델.md` — the exact Pydantic models (`User`, `Assignment`, `DocumentChapter`, `DocumentChunk`, `ChatLog`, `ChecklistItem`, `AdaptationReport`, `ReportSection`) and their field names/types. Every module exchanges data using these; do not rename or add fields. `User` includes `email`/`password_hash` — never return `password_hash` in an API response.
+- `guidelines/3_API_명세.md` — exact endpoints, request/response shapes, the common error format `{"error": true, "message": "..."}`, and the auth rules in §3-9 (every endpoint except `/user/register`/`/user/login` requires a `Bearer` token; the server verifies the token's `user_id`/`role` against the identity fields in the request, it doesn't just trust them).
 - `guidelines/4_프롬프트_브리프.md` — per-owner requirement briefs (copy-paste ready); §4-1's chatbot/report/draft requirements are the most detailed spec for RAG behavior and report signal definitions.
-- `guidelines/5_기술스택_폴더구조.md` — tech stack, the frozen folder layout, `main.py` router-registration pattern, env var names, HTTP status code mapping, git branch strategy, and deployment plan (Vercel + Railway).
-- `guidelines/6_통합_체크포인트.md` — integration schedule and the 9-step end-to-end test scenario (§6-3) that must pass before submission.
+- `guidelines/5_기술스택_폴더구조.md` — tech stack, the frozen folder layout, `main.py` router-registration pattern, env var names, HTTP status code mapping, git branch strategy, deployment plan (Vercel + Railway), and §5-9's cost/traffic defenses (rate limiting, request size caps, OpenAI billing hard limit).
+- `guidelines/6_통합_체크포인트.md` — integration schedule, the 9-step end-to-end test scenario (§6-3) that must pass before submission, and §6-5's explicit "not in 1차, revisit after 예선" list (email verification, password reset, refresh tokens) — don't implement those without checking with 조장 first.
 
 ## Architecture (once implemented, per the frozen spec)
 
@@ -35,7 +35,7 @@ Three people are building this in parallel against the frozen specs in `guidelin
 **Backend layout** (`backend/`):
 - `main.py` — single FastAPI app; each module registers its router with `app.include_router(...)`.
 - `schemas/` — the common data models, one file per model group (`user.py`, `assignment.py`, `document.py`, `chat.py`, `checklist.py`, `report.py`).
-- `core/` — shared `database.py` (MySQL) and `chroma_client.py` (ChromaDB).
+- `core/` — shared `database.py` (MySQL), `chroma_client.py` (ChromaDB), `auth.py` (JWT issue/verify + password hashing + the `get_current_user` dependency, owned by 팀원 B), `rate_limit.py` (slowapi config, owned by 조장).
 - `routers/` — one file per owner/domain (`user.py`, `assignment.py`, `document.py`, `checklist.py`, `checklist_draft.py`, `chat.py`, `report.py`). Files are individually owned — only touch your own router file.
 
 **Frontend layout** (`frontend/src/`): `api/client.js` (shared axios instance), `services/router/*.js` (one file per backend router, 1:1 naming), `pages/{newcomer,hr}/`, `components/{newcomer,hr}/`, `styles/`.
@@ -44,10 +44,14 @@ Three people are building this in parallel against the frozen specs in `guidelin
 
 **Checklist draft vs. save split**: `POST /checklist/draft` (조장's module) only *previews* AI-generated `{title, chapter_id}` candidates — it does not write to MySQL. Saving/editing (조장's draft output or a mentor's manual entries) always goes through `POST /checklist` and friends, owned by 팀원 A. Don't merge these two responsibilities into one module.
 
+**Auth**: login (`POST /user/login`) issues a JWT; the frontend sends it as `Authorization: Bearer <token>` on every other request. Every router-level handler (other than register/login) depends on `core.auth.get_current_user` and must check that the token's `user_id`/`role` matches the identity fields in the request body/query — the request still carries `newcomer_id`/`mentor_id` as before (schemas are unchanged), but those values are no longer trusted at face value. Email verification is explicitly out of scope for 1차 (§6-5) — `email` exists only as a unique login identifier.
+
+**Cost defense**: `/chat/ask`, `/checklist/draft`, `/report/generate` call OpenAI directly and are rate-limited both per-`user_id` and per-IP (guidelines §5-9) — per-user alone isn't enough since account creation has no email verification gate. Cap `max_tokens` on every OpenAI call.
+
 ## Commands (once the skeleton exists)
 
 - Backend: `uvicorn main:app --reload` from `backend/`, fixed port `8000`.
-- Env vars (see `guidelines/5_기술스택_폴더구조.md` §5-4 for the full list): `OPENAI_API_KEY`, `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`, `CHROMA_PERSIST_DIR`. Real values go in `.env` (gitignored); only `.env.example` is committed.
+- Env vars (see `guidelines/5_기술스택_폴더구조.md` §5-4 for the full list): `OPENAI_API_KEY`, `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`, `CHROMA_PERSIST_DIR`, `JWT_SECRET_KEY`, `JWT_EXPIRE_MINUTES`. Real values go in `.env` (gitignored); only `.env.example` is committed.
 - No test suite or lint config exists yet in this repo — check `backend/requirements.txt` / `frontend/package.json` once they're added rather than assuming a framework.
 
 ## Conventions specific to this repo
@@ -57,3 +61,4 @@ Three people are building this in parallel against the frozen specs in `guidelin
 - Keep module boundaries per §1-5: checklist draft generation (조장) only reads `DocumentChapter` from MySQL — no ChromaDB access; checklist edit/save (팀원 A) is MySQL-only too.
 - Chat failure responses must never imply the document will be improved/expanded — that framing is reserved for the HR-facing report only (§1-7, §4-1).
 - Git branches: `feature/조장`, `feature/팀원A`, `feature/팀원B`, merged into `main`. Conflicts in `schemas/`, `core/`, `main.py` are resolved by 조장; conflicts inside a single owner's folder are resolved by that owner.
+- Before implementing password reset, refresh tokens, or actual email-verification delivery, check `guidelines/6_통합_체크포인트.md` §6-5 — these are deliberately deferred past 1차, not forgotten.
