@@ -7,17 +7,19 @@
 
 ## 3-1. 사용자/배정 (담당: 팀원 B)
 
-| Method | Endpoint | 요청 | 응답 |
-|---|---|---|---|
-| POST | `/user/register` | `{name: str, role: "newcomer" \| "mentor"}` | `User` |
-| GET | `/user/{user_id}` | - | `User` |
-| POST | `/assignment` | `{mentor_id: str, newcomer_id: str, document_id: str}` | `Assignment` |
-| GET | `/assignment?newcomer_id=` | - | `Assignment` |
-| GET | `/assignment?mentor_id=` | - | `list[Assignment]` |
+| Method | Endpoint | 인증 | 요청 | 응답 |
+|---|---|---|---|---|
+| POST | `/user/register` | 불필요 | `{name: str, email: str, password: str, role: "newcomer" \| "mentor"}` | `User` (password_hash 제외) |
+| POST | `/user/login` | 불필요 | `{email: str, password: str}` | `{access_token: str, token_type: "bearer", user: User}` |
+| GET | `/user/{user_id}` | 필요 | - | `User` (password_hash 제외) |
+| POST | `/assignment` | 필요 (mentor) | `{mentor_id: str, newcomer_id: str, document_id: str}` | `Assignment` |
+| GET | `/assignment?newcomer_id=` | 필요 | - | `Assignment` |
+| GET | `/assignment?mentor_id=` | 필요 (mentor) | - | `list[Assignment]` |
 
 **설명**
-- `/user/register`: 최초 진입 시 이름·역할 입력받아 사용자 생성 (1차 빌드는 비밀번호 등 정식 인증 없음)
-- `/assignment` (POST): 사수가 업로드한 문서를 특정 신입과 연결. 이 호출이 있어야 해당 신입이 챗봇을 사용할 수 있음
+- `/user/register`: 이름·이메일·비밀번호·역할을 입력받아 사용자 생성. 비밀번호는 해시해서 `password_hash`로 저장, 응답에는 포함하지 않음. 이메일은 로그인 식별자로만 쓰이며 중복 가입 방지 외의 인증(메일 발송 등)은 하지 않음 (2차 확장 항목)
+- `/user/login`: 이메일+비밀번호 검증 후 JWT(`access_token`) 발급. 프론트엔드는 이후 모든 요청에 `Authorization: Bearer <access_token>` 헤더를 실어 보냄
+- `/assignment` (POST): 사수가 업로드한 문서를 특정 신입과 연결. 이 호출이 있어야 해당 신입이 챗봇을 사용할 수 있음. 토큰의 `user_id`가 요청 바디의 `mentor_id`와 일치해야 함 (3-9 참고)
 - `/assignment?newcomer_id=`: 챗봇·체크리스트·리포트 모듈이 "이 신입의 배정 문서가 뭔지" 확인할 때 내부적으로 사용
 - `/assignment?mentor_id=`: 사수 화면에서 "내가 담당하는 신입 목록"을 보여줄 때 사용
 
@@ -101,7 +103,8 @@
 
 - 모든 에러 응답은 동일한 포맷 사용: `{"error": true, "message": "..."}`
 - 날짜/시간 필드는 ISO 8601 형식 문자열로 주고받음 (`datetime` 타입 직렬화 시)
-- 1차 빌드에서는 비밀번호·토큰 기반 인증을 구현하지 않음. `user_id`를 프론트엔드가 보관해 매 요청에 실어 보내는 방식으로 단순화 (추후 정식 인증으로 확장 가능)
+- 1차 빌드부터 이메일+비밀번호 기반 로그인과 JWT 인증을 구현함 (이메일 인증 메일 발송만 2차로 미룸). `/user/register`, `/user/login`을 제외한 모든 API는 `Authorization: Bearer <access_token>` 헤더 필요 — 자세한 규칙은 3-9 참고
+- `/chat/ask`, `/checklist/draft`, `/report/generate` 등 LLM을 호출하는 엔드포인트는 사용자별·IP별 rate limit이 걸려 있음 (5-9 참고). 한도 초과 시 429 응답
 
 ---
 
@@ -109,6 +112,19 @@
 
 | 담당 | 엔드포인트 |
 |---|---|
-| 팀원 B | `/user/register`, `/user/{user_id}`, `/assignment` (POST/GET) |
+| 팀원 B | `/user/register`, `/user/login`, `/user/{user_id}`, `/assignment` (POST/GET) |
 | 팀원 A | `/document/upload`, `/document/{id}/chapters`, `/checklist` (POST/GET/PATCH), `/checklist/{id}/reorder`, `/checklist/{id}/complete` |
 | 조장 | `/chat/ask`, `/chat/logs`, `/checklist/draft`, `/report/generate`, `/report/{newcomer_id}`, `/report/{newcomer_id}/history` |
+
+---
+
+## 3-9. 인증 규칙 (1차 빌드부터 적용)
+
+> 인증 로직 자체(`/user/login`에서 토큰 발급, 토큰 검증 의존성)는 팀원 B가 `backend/core/auth.py`에 구현하고, 나머지 담당자는 자기 라우터에서 이 의존성을 가져다 쓰기만 하면 됩니다 (5-2 폴더 구조 참고).
+
+- `/user/register`, `/user/login`을 제외한 모든 엔드포인트는 `Authorization: Bearer <access_token>` 헤더가 필수입니다. 헤더가 없거나 토큰이 만료/위조된 경우 **401**
+- 서버는 토큰에서 `user_id`, `role`을 추출합니다. 요청 바디·쿼리에 `newcomer_id`/`mentor_id` 등 신원 필드가 함께 오는 기존 API 형식은 그대로 유지하되(요청/응답 스키마 변경 없음), 서버가 **토큰의 user_id·role과 그 필드가 일치하는지 검증**합니다. 불일치 시 **403**
+  - 예: `POST /assignment` 요청 바디의 `mentor_id`는 토큰의 `user_id`와 같아야 함
+  - 예: `POST /checklist/{item_id}/complete` 요청 바디의 `newcomer_id`는 토큰의 `user_id`와 같아야 함
+- `mentor` 전용 API(`/document/upload`, `/assignment` POST, `/checklist/draft`, `/checklist` POST/PATCH/reorder, `/report/*`)는 토큰의 `role`이 `"mentor"`가 아니면 **403**
+- `GET /user/{user_id}`처럼 신원 필드가 URL 경로에만 있는 조회형 API는 토큰만 유효하면 통과 (다른 사람 정보 조회 자체는 허용 — 사수 이름 조회 등 기존 플로우 유지)
