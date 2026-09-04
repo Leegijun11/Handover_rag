@@ -1,0 +1,59 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Repository state
+
+This repo currently contains **spec documents only** (`guidelines/0`–`6`) — no `backend/` or `frontend/` code exists yet. The specs are the binding source of truth for what gets built; read the relevant file(s) below before writing any code here, and follow them exactly rather than inventing an alternative structure.
+
+## What this project is
+
+"신입 업무보조 챗봇 + 업무 적응도 리포트" — an onboarding assistant for new hires. A mentor (사수) uploads a handover document, assigns it to one newcomer (신입), and the newcomer can then chat with a RAG bot scoped to that document and check off a checklist. The mentor separately views an AI-generated "adaptation report" built from the newcomer's chat/checklist activity (never shown to the newcomer).
+
+Three people are building this in parallel against the frozen specs in `guidelines/`:
+
+| Owner | Modules | Spec sections |
+|---|---|---|
+| 조장 (lead) | Chatbot (RAG), checklist draft generation, adaptation report | `guidelines/4_프롬프트_브리프.md` §4-1 |
+| 팀원 A | Document processing (chunk/embed), checklist edit/save/complete | §4-2 |
+| 팀원 B | User/Assignment backend, entire React frontend | §4-3 |
+
+## Source-of-truth documents (read before implementing)
+
+- `guidelines/0_목적_사용법.md` — how to use these docs; **data model, API spec, tech stack, and folder structure are frozen and may only be changed by 조장** — do not improvise around them.
+- `guidelines/1_시스템_개요.md` — system overview: user types, screen layout, module responsibilities, storage split, and the cross-layer rules in §1-5/§1-7 (chatbot only searches the newcomer's *assigned* document; failed answers never mention "we'll improve the docs"; checklist completion is an unverified self-check by design, used as a report signal).
+- `guidelines/2_공통_데이터_모델.md` — the exact Pydantic models (`User`, `Assignment`, `DocumentChapter`, `DocumentChunk`, `ChatLog`, `ChecklistItem`, `AdaptationReport`, `ReportSection`) and their field names/types. Every module exchanges data using these; do not rename or add fields.
+- `guidelines/3_API_명세.md` — exact endpoints, request/response shapes, and the common error format `{"error": true, "message": "..."}`.
+- `guidelines/4_프롬프트_브리프.md` — per-owner requirement briefs (copy-paste ready); §4-1's chatbot/report/draft requirements are the most detailed spec for RAG behavior and report signal definitions.
+- `guidelines/5_기술스택_폴더구조.md` — tech stack, the frozen folder layout, `main.py` router-registration pattern, env var names, HTTP status code mapping, git branch strategy, and deployment plan (Vercel + Railway).
+- `guidelines/6_통합_체크포인트.md` — integration schedule and the 9-step end-to-end test scenario (§6-3) that must pass before submission.
+
+## Architecture (once implemented, per the frozen spec)
+
+**Stack**: FastAPI backend, MySQL (structured data), ChromaDB local PersistentClient (embeddings, one collection per `document_id`), OpenAI API for LLM calls, LangGraph for multi-step logic (chat answer generation, checklist draft generation, report signal computation), React frontend.
+
+**Backend layout** (`backend/`):
+- `main.py` — single FastAPI app; each module registers its router with `app.include_router(...)`.
+- `schemas/` — the common data models, one file per model group (`user.py`, `assignment.py`, `document.py`, `chat.py`, `checklist.py`, `report.py`).
+- `core/` — shared `database.py` (MySQL) and `chroma_client.py` (ChromaDB).
+- `routers/` — one file per owner/domain (`user.py`, `assignment.py`, `document.py`, `checklist.py`, `checklist_draft.py`, `chat.py`, `report.py`). Files are individually owned — only touch your own router file.
+
+**Frontend layout** (`frontend/src/`): `api/client.js` (shared axios instance), `services/router/*.js` (one file per backend router, 1:1 naming), `pages/{newcomer,hr}/`, `components/{newcomer,hr}/`, `styles/`.
+
+**Key request-flow rule**: the chatbot and report modules never trust a `document_id` directly from the client — they look up `Assignment` by `newcomer_id` first to find the document the newcomer is actually scoped to, then restrict ChromaDB search / report aggregation to that scope. A newcomer with no `Assignment` gets a 404 from `/chat/ask`.
+
+**Checklist draft vs. save split**: `POST /checklist/draft` (조장's module) only *previews* AI-generated `{title, chapter_id}` candidates — it does not write to MySQL. Saving/editing (조장's draft output or a mentor's manual entries) always goes through `POST /checklist` and friends, owned by 팀원 A. Don't merge these two responsibilities into one module.
+
+## Commands (once the skeleton exists)
+
+- Backend: `uvicorn main:app --reload` from `backend/`, fixed port `8000`.
+- Env vars (see `guidelines/5_기술스택_폴더구조.md` §5-4 for the full list): `OPENAI_API_KEY`, `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`, `CHROMA_PERSIST_DIR`. Real values go in `.env` (gitignored); only `.env.example` is committed.
+- No test suite or lint config exists yet in this repo — check `backend/requirements.txt` / `frontend/package.json` once they're added rather than assuming a framework.
+
+## Conventions specific to this repo
+
+- Field names and types in `schemas/` are frozen by spec — do not rename or restructure them even if a different name reads better.
+- Don't add new top-level API endpoints beyond `guidelines/3_API_명세.md` without flagging it to 조장 first (per §0's change-control rule); the one standing exception is adding your own router's `import`/`include_router` lines in `main.py`.
+- Keep module boundaries per §1-5: checklist draft generation (조장) only reads `DocumentChapter` from MySQL — no ChromaDB access; checklist edit/save (팀원 A) is MySQL-only too.
+- Chat failure responses must never imply the document will be improved/expanded — that framing is reserved for the HR-facing report only (§1-7, §4-1).
+- Git branches: `feature/조장`, `feature/팀원A`, `feature/팀원B`, merged into `main`. Conflicts in `schemas/`, `core/`, `main.py` are resolved by 조장; conflicts inside a single owner's folder are resolved by that owner.
