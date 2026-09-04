@@ -29,11 +29,14 @@
 
 | Method | Endpoint | 요청 | 응답 |
 |---|---|---|---|
-| POST | `/document/upload` | `{mentor_id: str, file/text}` | `{document_id: str, chapters: list[DocumentChapter]}` |
+| POST | `/document/upload` | `{mentor_id: str, file: <파일>}` **또는** `{mentor_id: str, chapters: list[{title: str, content: str}]}` | `{document_id: str, chapters: list[DocumentChapter]}` |
 | GET | `/document/{document_id}/chapters` | - | `list[DocumentChapter]` |
 
 **설명**
-- `/document/upload`: 사수가 인수인계서를 업로드. 챕터 단위로 구조화(`DocumentChapter`) + 청킹·임베딩(`DocumentChunk`, ChromaDB 저장)까지 한 번에 처리. `document_id`는 이 호출에서 새로 발급됨
+- `/document/upload`: 사수가 인수인계서를 등록. 입력 방식은 두 가지
+  - **파일 업로드** (`file`): 서버가 목차(장-절)를 자동 파싱해서 `DocumentChapter` 생성
+  - **직접 입력** (`chapters`): 사수가 화면에서 챕터를 하나씩 작성(제목+본문)해서 이미 확정된 구조로 보냄 — 서버는 자동 파싱 없이 받은 그대로 `DocumentChapter`로 저장 (프론트 "챕터 추가" 폼 UI, 4-2/4-3 브리프 참고)
+  - 두 경로 모두 챕터 저장 후 각 챕터 내용을 청킹해서 `DocumentChunk` 생성 + 임베딩 후 ChromaDB에 저장까지 한 번에 처리. 청크 분할 기준(문단/글자 수 등)은 입력 방식과 무관하게 팀원 A 재량. `document_id`는 이 호출에서 새로 발급됨
 - `/document/{id}/chapters`: HR 화면에서 목차 트리를 보여줄 때, 또는 체크리스트 작성 시 챕터 선택 목록을 채울 때 사용
 
 ---
