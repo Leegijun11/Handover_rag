@@ -1,0 +1,18 @@
+# Python (backend)
+__pycache__/
+*.pyc
+.venv/
+venv/
+chroma_data/
+
+# Node (frontend)
+node_modules/
+dist/
+build/
+
+# 환경변수 (실제 키 값 커밋 금지)
+.env
+
+# OS / 에디터
+.DS_Store
+.vscode/

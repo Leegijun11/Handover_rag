@@ -1,0 +1,13 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.9
+python-dotenv>=1.0
+SQLAlchemy>=2.0
+PyMySQL>=1.1
+chromadb>=0.5
+openai>=1.50
+langgraph>=0.2
+PyJWT>=2.9
+passlib[bcrypt]>=1.7
+slowapi>=0.1.9
+python-multipart>=0.0.9
