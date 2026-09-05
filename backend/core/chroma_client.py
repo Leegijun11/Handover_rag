@@ -14,3 +14,5 @@ def get_chroma_client() -> chromadb.PersistentClient:
 def get_collection(document_id: str):
     """컬렉션명 = document_id (guidelines 5-4) — 문서 단위로 검색 범위가 자연히 분리됨."""
     return _client.get_or_create_collection(name=document_id)
+    # get_or_create_collection은 컬렉션이 없으면 생성하고, 있으면 가져옴.
+    # 어디에 저장할지를 정하는 함수
