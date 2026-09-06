@@ -40,7 +40,7 @@ Three people are building this in parallel against the frozen specs in `guidelin
 
 **Frontend layout** (`frontend/src/`): `api/client.js` (shared axios instance), `services/router/*.js` (one file per backend router, 1:1 naming), `pages/{newcomer,hr}/`, `components/{newcomer,hr}/`, `styles/`.
 
-**Key request-flow rule**: the chatbot and report modules never trust a `document_id` directly from the client — they look up `Assignment` by `newcomer_id` first to find the document the newcomer is actually scoped to, then restrict ChromaDB search / report aggregation to that scope. A newcomer with no `Assignment` gets a 404 from `/chat/ask`.
+**Key request-flow rule**: the chatbot and report modules never trust a `document_id` directly from the client — they look up `Assignment` by `newcomer_id` first to find the document the newcomer is actually scoped to, then restrict ChromaDB search / report aggregation to that scope. A newcomer with no `Assignment` gets a 404 from `/chat/ask`. The same discipline applies to `GET /document/{document_id}/chapters` (guidelines §3-9): being logged in isn't enough since chapter content is exposed — the caller must either own the document (mentor) or be assigned to it (newcomer), which requires `document.py` (팀원 A) to check `Assignment` (팀원 B's model) rather than trusting the path parameter alone.
 
 **Checklist draft vs. save split**: `POST /checklist/draft` (조장's module) only *previews* AI-generated `{title, chapter_id}` candidates — it does not write to MySQL. Saving/editing (조장's draft output or a mentor's manual entries) always goes through `POST /checklist` and friends, owned by 팀원 A. Don't merge these two responsibilities into one module.
 
