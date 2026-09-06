@@ -130,4 +130,6 @@
   - 예: `POST /assignment` 요청 바디의 `mentor_id`는 토큰의 `user_id`와 같아야 함
   - 예: `POST /checklist/{item_id}/complete` 요청 바디의 `newcomer_id`는 토큰의 `user_id`와 같아야 함
 - `mentor` 전용 API(`/document/upload`, `/assignment` POST, `/checklist/draft`, `/checklist` POST/PATCH/reorder, `/report/*`)는 토큰의 `role`이 `"mentor"`가 아니면 **403**
-- `GET /user/{user_id}`처럼 신원 필드가 URL 경로에만 있는 조회형 API는 토큰만 유효하면 통과 (다른 사람 정보 조회 자체는 허용 — 사수 이름 조회 등 기존 플로우 유지)
+- `GET /user/{user_id}`는 신원 필드가 URL 경로에만 있지만, 노출되는 정보가 이름/이메일/역할 정도라 토큰만 유효하면 통과 (다른 사람 조회 자체는 허용 — 사수 이름 조회 등 기존 플로우 유지)
+- `GET /document/{document_id}/chapters`는 다름 — 챕터 본문 전체(인수인계서 내용)가 그대로 노출되는 조회라 토큰 유효성만으로는 부족함. **토큰의 `user_id`가 (a) 그 `document_id`를 업로드한 사수이거나, (b) 그 `document_id`로 배정받은 신입(`Assignment.newcomer_id`) 중 하나여야** 통과, 둘 다 아니면 **403**. 이 검증을 하려면 `document.py`(팀원 A)가 `Assignment`(팀원 B 소유 모델/데이터) 조회가 필요하므로, 조회 방식은 두 담당자가 직접 협의해서 정함 (0번 문서의 "인접 담당자끼리 협의" 원칙)
+  - 이 검증이 가능하려면 `document/upload` 시점에 "이 `document_id`를 누가(mentor_id) 올렸는지"를 어딘가에 남겨둬야 함 — 이 매핑은 2번 문서(공통 데이터 모델)에 별도 필드로 없으므로, 팀원 A가 자기 재량으로 내부 테이블에 기록 (프론트/타 모듈에 노출되는 스키마가 아니라 내부 구현 디테일)
