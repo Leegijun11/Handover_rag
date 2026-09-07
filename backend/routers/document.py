@@ -1,35 +1,99 @@
-"""문서 처리 (담당: 팀원 A) — guidelines 3-2, 3-9, 4-2.
+"""문서 처리 (담당: 팀원 A) — guidelines 3-2, 3-9, 4-2."""
 
-TODO(팀원 A): 아래는 main.py가 부팅되도록 만든 최소 스텁입니다. 직접 채워서 구현하세요.
-"""
+import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+from sqlalchemy import Column, String, Text
+from sqlalchemy.orm import Session, declarative_base
 
-from core.auth import CurrentUser, get_current_user
+from core.auth import CurrentUser, get_current_user, require_role, require_self
+from core.database import engine, get_db
+from schemas.document import DocumentChapter
 
 router = APIRouter(tags=["document"])
 
+# ── SQLAlchemy 테이블 정의 ──
+# TODO(팀): 공용 Base 방식이 확정되면 옮길 것
+Base = declarative_base()
 
+
+def _uuid() -> str:
+    return str(uuid.uuid4())
+
+
+class DocumentChapterORM(Base):
+    __tablename__ = "document_chapters"
+
+    chapter_id = Column(String(36), primary_key=True, default=_uuid)
+    document_id = Column(String(36), index=True, nullable=False)
+    title = Column(String(255), nullable=False)
+    parent_id = Column(String(36), nullable=True)
+    content = Column(Text, nullable=False)
+
+
+class DocumentMentorMapORM(Base):
+    """document_id -> mentor_id 매핑 (A 내부 전용, 3-9 인증검증용)."""
+    __tablename__ = "document_mentor_map"
+
+    document_id = Column(String(36), primary_key=True)
+    mentor_id = Column(String(36), nullable=False, index=True)
+
+
+Base.metadata.create_all(bind=engine)
+
+
+# ── 요청 스키마 ──
+class ChapterInput(BaseModel):
+    title: str
+    content: str
+
+
+class UploadChaptersRequest(BaseModel):
+    mentor_id: str
+    chapters: list[ChapterInput]
+
+
+# ── API ──
 @router.post("/document/upload", status_code=201)
 def upload_document(
-    file: UploadFile | None = None,
+    payload: UploadChaptersRequest,
     current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    # TODO(팀원 A): require_role(current_user, "mentor") 먼저 검증
-    # - file이 오면: 목차(장-절) 자동 파싱 -> DocumentChapter 생성
-    # - chapters(list[{title, content}])가 오면: 파싱 없이 그대로 DocumentChapter 생성
-    # - 두 경로 모두 챕터별 청킹 -> DocumentChunk 생성 -> 임베딩 -> ChromaDB 저장
-    #   (core.chroma_client.get_collection(document_id) 사용, 청크 크기 기준은 재량)
-    # - 이 document_id를 이 mentor(current_user["user_id"])가 올렸다는 매핑을 내부에
-    #   기록해둘 것 — get_chapters의 권한 검증(아래)에 필요. 2번 문서엔 없는 필드라
-    #   내 재량으로 별도 테이블/컬럼에 저장 (guidelines 3-9)
-    raise HTTPException(status_code=501, detail="담당자(팀원 A) 구현 필요")
+    require_role(current_user, "mentor")
+    require_self(current_user, payload.mentor_id)
 
+    document_id = str(uuid.uuid4())
 
-@router.get("/document/{document_id}/chapters")
-def get_chapters(document_id: str, current_user: CurrentUser = Depends(get_current_user)):
-    # TODO(팀원 A): 로그인 여부만으로는 부족함 — 챕터 본문 전체가 노출되는 조회라
-    # 토큰의 user_id가 (a) 이 document_id를 업로드한 mentor이거나,
-    # (b) 이 document_id로 배정된 newcomer(Assignment.newcomer_id)인지 확인해야 함.
-    # 아니면 403. (b) 확인에 Assignment 조회 필요 — 팀원 B와 조회 방식 협의 (guidelines 3-9)
-    raise HTTPException(status_code=501, detail="담당자(팀원 A) 구현 필요")
+    # 1. 챕터 저장 (파싱 없이 그대로 — 직접입력 경로)
+    chapter_rows = []
+    for ch in payload.chapters:
+        row = DocumentChapterORM(
+            chapter_id=str(uuid.uuid4()),
+            document_id=document_id,
+            title=ch.title,
+            parent_id=None,
+            content=ch.content,
+        )
+        db.add(row)
+        chapter_rows.append(row)
+
+    # 2. document -> mentor 매핑 기록
+    db.add(DocumentMentorMapORM(document_id=document_id, mentor_id=payload.mentor_id))
+    db.commit()
+
+    # TODO(A): 다음 커밋에서 이어붙일 부분 —
+    #   챕터별 청킹 -> 임베딩 -> ChromaDB 저장
+
+    chapters_response = [
+        DocumentChapter(
+            chapter_id=r.chapter_id,
+            document_id=document_id,
+            title=r.title,
+            parent_id=r.parent_id,
+            content=r.content,
+        )
+        for r in chapter_rows
+    ]
+    return {"document_id": document_id, "chapters": chapters_response}
