@@ -10,6 +10,8 @@
     def ask(request: Request, ...): ...
 """
 
+import os
+
 import jwt
 from fastapi import Request
 from slowapi import Limiter
@@ -20,6 +22,11 @@ from core.auth import JWT_ALGORITHM, JWT_SECRET_KEY
 # guidelines 5-9 초안 기준치. 실측하며 조정.
 USER_RATE_LIMIT = "10/minute"
 IP_RATE_LIMIT = "20/minute"
+
+# 데모 계정(6-6 시딩) user_id 목록 — 여러 명이 같은 데모 계정을 동시에 쓰므로
+# 이 계정들만 user_id 단독이 아니라 user_id+IP로 키를 나눠서, 접속자별로
+# 10/minute를 나눠 갖지 않고 각자 자기 몫을 갖게 함 (guidelines 5-9 항목 6).
+_DEMO_USER_IDS = set(filter(None, os.getenv("DEMO_USER_IDS", "").split(",")))
 
 
 def _user_id_from_request(request: Request) -> str | None:
@@ -49,9 +56,22 @@ def _client_ip(request: Request) -> str:
 
 
 def get_user_key(request: Request) -> str:
-    """사용자별 제한용 키 — 토큰이 없으면 IP로 대체."""
+    """사용자별 제한용 키 — 토큰이 없으면 IP로 대체.
+
+    데모 계정(_DEMO_USER_IDS)은 예외: user_id만으로 키를 만들면 그 계정을
+    동시에 쓰는 모든 방문자가 하나의 10/minute 카운터를 나눠 쓰게 되므로,
+    user_id + 방문자 구분값을 합쳐서 방문자별로 카운터를 분리한다.
+    방문자 구분값은 프론트가 보내는 X-Visitor-Id 헤더(브라우저별 고유 ID,
+    api/client.js 참고)를 우선 쓰고, 없으면 IP로 폴백 — 심사장처럼 여러 명이
+    같은 공용 IP(WiFi)를 쓰는 상황에서 IP만으로는 여전히 묶여버리기 때문.
+    """
     user_id = _user_id_from_request(request)
-    return f"user:{user_id}" if user_id else f"ip:{_client_ip(request)}"
+    if not user_id:
+        return f"ip:{_client_ip(request)}"
+    if user_id in _DEMO_USER_IDS:
+        visitor = request.headers.get("x-visitor-id") or f"ip:{_client_ip(request)}"
+        return f"demo:{user_id}:{visitor}"
+    return f"user:{user_id}"
 
 
 def get_ip_key(request: Request) -> str:

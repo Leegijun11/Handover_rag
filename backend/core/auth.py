@@ -3,6 +3,7 @@
 다른 라우터는 이 모듈의 get_current_user만 가져다 쓰면 됨 (guidelines 3-9).
 """
 
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Literal, TypedDict
@@ -12,7 +13,14 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from passlib.context import CryptContext
 
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me")
+# `.env`에 JWT_SECRET_KEY= 처럼 값 없이 키만 있으면 os.getenv가 빈 문자열("")을
+# 반환하고, 빈 문자열은 os.getenv의 default 인자를 무시시킴(둘 다 "설정됨" 취급) —
+# 그래서 `or`로 빈 문자열도 명시적으로 걸러내야 기본값이 실제로 먹힘.
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY") or "dev-secret-change-me"
+if JWT_SECRET_KEY == "dev-secret-change-me":
+    logging.getLogger("uvicorn.error").warning(
+        "JWT_SECRET_KEY가 설정되지 않아 개발용 기본값을 사용합니다 — 배포 전 .env에 실제 값을 채우세요."
+    )
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))
 
