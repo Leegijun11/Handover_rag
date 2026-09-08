@@ -1,7 +1,7 @@
 import os
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
 MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
@@ -16,6 +16,11 @@ DATABASE_URL = (
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# 공용 ORM Base (guidelines 5-3-1). backend/models/*.py는 전부 이 Base를 상속해서
+# 테이블을 정의하고, main.py가 그 모듈들을 import한 뒤 Base.metadata.create_all(bind=engine)로
+# 실제 테이블을 생성함 (1차 빌드 범위에서는 Alembic 없이 이 방식으로 충분).
+Base = declarative_base()
 
 
 def get_db():
