@@ -4,6 +4,7 @@ pydantic>=2.9
 python-dotenv>=1.0
 SQLAlchemy>=2.0
 PyMySQL>=1.1
+cryptography>=41  # required by PyMySQL for MySQL 8 default auth (caching_sha2_password) - needed for Railway MySQL
 chromadb>=0.5
 openai>=1.50
 langgraph>=0.2

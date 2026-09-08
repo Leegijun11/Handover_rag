@@ -8,11 +8,32 @@ const apiClient = axios.create({
 export const TOKEN_STORAGE_KEY = "access_token";
 export const USER_STORAGE_KEY = "current_user";
 
+// 방문자별 고유 ID. 데모 계정(1-8)을 여러 명이 동시에 같은 로그인으로 쓸 때,
+// 같은 WiFi 등으로 IP가 겹쳐도 브라우저별로 rate limit이 분리되게 하기 위함
+// (guidelines 5-9 항목 6, core/rate_limit.py가 X-Visitor-Id 헤더를 우선 사용).
+// 일반 회원가입 사용자에게는 아무 영향 없음 — 서버가 데모 계정에만 이 값을 씀.
+function getOrCreateVisitorId() {
+  try {
+    let id = localStorage.getItem("visitor_id");
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem("visitor_id", id);
+    }
+    return id;
+  } catch {
+    return null; // localStorage 접근 불가(프라이빗 모드 등) 시 헤더 생략, IP로 폴백
+  }
+}
+
 // 로그인 시 저장해둔 JWT를 모든 요청에 자동으로 실어 보냄 (guidelines 3-9).
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem(TOKEN_STORAGE_KEY);
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  const visitorId = getOrCreateVisitorId();
+  if (visitorId) {
+    config.headers["X-Visitor-Id"] = visitorId;
   }
   return config;
 });
@@ -20,13 +41,10 @@ apiClient.interceptors.request.use((config) => {
 /**
  * 서버 에러 바디에서 사람이 읽을 메시지를 뽑아낸다.
  *
- * guidelines 3-7은 모든 에러를 {error: true, message: "..."} 로 통일하기로 했지만,
- * 현재 백엔드는 상황에 따라 세 가지 형태로 응답한다 (조장에게 통일 요청해둔 상태):
- *   - HTTPException        -> {detail: "..."}
- *   - 요청 검증 실패(422)  -> {detail: [{msg: "...", ...}]}
- *   - rate limit(429)      -> {error: "Rate limit exceeded: ..."}
- * 화면 코드가 이 분기를 매번 하지 않도록 여기서 한 번만 흡수한다.
- * 백엔드가 공통 포맷으로 통일되면 이 함수는 message 한 줄만 남기고 정리할 수 있다.
+ * 백엔드는 main.py의 전역 예외 핸들러로 모든 에러를 3-7번 공통 포맷
+ * ({error: true, message: "..."})으로 통일해서 내려준다. 아래 나머지 분기는
+ * 그 핸들러를 거치지 않는 경로(프록시/게이트웨이가 대신 만든 응답, 아직 갱신 안 된
+ * 배포본 등)를 대비한 폴백이다 — 화면 코드가 이 분기를 매번 하지 않도록 여기서 흡수한다.
  */
 function extractErrorMessage(error) {
   const data = error.response?.data;

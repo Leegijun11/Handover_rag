@@ -8,29 +8,31 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Literal, TypedDict
 
+import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-import bcrypt
 
-logger = logging.getLogger(__name__)
-
-# 로컬 개발 편의를 위한 폴백 값. 이 값이 그대로 쓰이면 공개 레포를 본 사람이
-# 누구나 mentor 토큰을 위조할 수 있으므로, 폴백이 걸린 경우 부팅 시 경고한다.
+# `.env`에 JWT_SECRET_KEY= 처럼 값 없이 키만 있으면 os.getenv가 빈 문자열("")을
+# 반환하고, 빈 문자열은 os.getenv의 default 인자를 무시시킴(둘 다 "설정됨" 취급) —
+# 그래서 `or`로 빈 문자열도 명시적으로 걸러내야 기본값이 실제로 먹힘.
 _DEFAULT_SECRET_KEY = "dev-secret-change-me"
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY") or _DEFAULT_SECRET_KEY
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))
 
+# uvicorn.error 로거를 쓰는 이유: 서버 기동 로그에 같이 찍혀야 배포 시점에 눈에 띔.
+logger = logging.getLogger("uvicorn.error")
+
 # 최소 32바이트: PyJWT가 그 미만이면 InsecureKeyLengthWarning을 낸다 (RFC 7518 3.2).
 _MIN_SECRET_BYTES = 32
 
 if JWT_SECRET_KEY == _DEFAULT_SECRET_KEY:
     logger.warning(
-        "JWT_SECRET_KEY 환경변수가 없어 공개된 기본값을 사용합니다. "
-        "이 값은 공개 저장소에 그대로 있으므로 누구나 토큰을 위조할 수 있습니다. "
-        "배포 환경(Railway)에서는 반드시 실제 값을 설정하세요 (guidelines 5-4)."
+        "JWT_SECRET_KEY가 설정되지 않아 개발용 기본값을 사용합니다. "
+        "이 값은 공개 저장소에 그대로 있어 누구나 토큰을 위조할 수 있으니 "
+        "배포 전 .env(Railway 환경변수)에 실제 값을 채우세요 (guidelines 5-4)."
     )
 elif len(JWT_SECRET_KEY.encode("utf-8")) < _MIN_SECRET_BYTES:
     logger.warning(
