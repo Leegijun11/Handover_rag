@@ -4,7 +4,7 @@ import os
 import re
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from openai import OpenAI
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -117,3 +117,39 @@ def upload_document(
         for r in chapter_rows
     ]
     return {"document_id": document_id, "chapters": chapters_response}
+
+
+@router.get("/document/{document_id}/chapters")
+def get_chapters(
+    document_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    mapping = (
+        db.query(DocumentMentorMapORM)
+        .filter(DocumentMentorMapORM.document_id == document_id)
+        .first()
+    )
+    is_owner_mentor = mapping is not None and mapping.mentor_id == current_user["user_id"]
+
+    # TODO(A, B와 협의): 배정된 신입인지 확인 — Assignment 조회 준비되면 추가
+    # is_assigned_newcomer = ...
+
+    if not is_owner_mentor:
+        raise HTTPException(status_code=403, detail="권한이 없습니다")
+
+    rows = (
+        db.query(DocumentChapterORM)
+        .filter(DocumentChapterORM.document_id == document_id)
+        .all()
+    )
+    return [
+        DocumentChapter(
+            chapter_id=r.chapter_id,
+            document_id=r.document_id,
+            title=r.title,
+            parent_id=r.parent_id,
+            content=r.content,
+        )
+        for r in rows
+    ]
