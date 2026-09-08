@@ -1,12 +1,13 @@
 """문서 처리 (담당: 팀원 A) — guidelines 3-2, 3-9, 4-2."""
 
+import json
 import os
 import re
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from openai import OpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
 from core.auth import CurrentUser, get_current_user, require_role, require_self
@@ -82,15 +83,24 @@ def _parse_chapters_from_text(text: str) -> list[dict]:
     return [{"title": "전체 내용", "content": text, "fallback": True}]
 
 
-# ── 요청 스키마 (직접입력 경로) ──
 class ChapterInput(BaseModel):
     title: str
     content: str
 
 
-class UploadChaptersRequest(BaseModel):
-    mentor_id: str
-    chapters: list[ChapterInput]
+def _parse_chapters_json(chapters_raw: str) -> list[dict]:
+    """chapters 폼 필드(JSON 문자열)를 파싱·검증. 실패하면 400."""
+    try:
+        raw_list = json.loads(chapters_raw)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="chapters는 올바른 JSON 형식이어야 합니다")
+
+    try:
+        validated = [ChapterInput(**item) for item in raw_list]
+    except (ValidationError, TypeError):
+        raise HTTPException(status_code=400, detail="chapters 형식이 올바르지 않습니다 (title, content 필요)")
+
+    return [{"title": c.title, "content": c.content} for c in validated]
 
 
 def _save_and_index_chapters(
@@ -99,7 +109,7 @@ def _save_and_index_chapters(
     mentor_id: str,
     chapters: list[dict],
 ) -> list[DocumentChapterORM]:
-    """챕터 저장 + mentor 매핑 기록 + 청킹->임베딩->ChromaDB 저장 (두 입력경로 공용)."""
+    """챕터 저장 + mentor 매핑 기록 + 청킹->임베딩->ChromaDB 저장 (두 입력방식 공용)."""
     chapter_rows = []
     for ch in chapters:
         row = DocumentChapterORM(
@@ -151,43 +161,33 @@ def _chapters_to_response(document_id: str, rows: list[DocumentChapterORM]) -> l
 
 # ── API ──
 @router.post("/document/upload", status_code=201)
-def upload_document(
-    payload: UploadChaptersRequest,
-    current_user: CurrentUser = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """직접입력 경로 (chapters). 파일 업로드는 /document/upload/file 참고."""
-    require_role(current_user, "mentor")
-    require_self(current_user, payload.mentor_id)
-
-    document_id = str(uuid.uuid4())
-    chapters = [{"title": ch.title, "content": ch.content} for ch in payload.chapters]
-    chapter_rows = _save_and_index_chapters(db, document_id, payload.mentor_id, chapters)
-
-    return {"document_id": document_id, "chapters": _chapters_to_response(document_id, chapter_rows)}
-
-
-@router.post("/document/upload/file", status_code=201)
-async def upload_document_file(
+async def upload_document(
     mentor_id: str = Form(...),
-    file: UploadFile = File(...),
+    file: UploadFile | None = File(None),
+    chapters: str | None = Form(None),  # JSON 문자열: [{"title": "...", "content": "..."}]
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """파일 업로드 경로 (file). 목차 자동 파싱, 실패 시 챕터 1개로 폴백."""
+    """인수인계서 등록 (guidelines 3-2) — file 또는 chapters 중 정확히 하나만 받음."""
     require_role(current_user, "mentor")
     require_self(current_user, mentor_id)
 
-    raw = await file.read()
-    if len(raw) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="파일 크기는 10MB를 초과할 수 없습니다")
+    if file is None and chapters is None:
+        raise HTTPException(status_code=400, detail="file 또는 chapters 중 하나는 필수입니다")
+    if file is not None and chapters is not None:
+        raise HTTPException(status_code=400, detail="file과 chapters를 동시에 보낼 수 없습니다")
 
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError:
-        raise HTTPException(status_code=400, detail="텍스트로 읽을 수 없는 파일입니다 (.txt, .md만 지원)")
-
-    parsed_chapters = _parse_chapters_from_text(text)
+    if file is not None:
+        raw = await file.read()
+        if len(raw) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail="파일 크기는 10MB를 초과할 수 없습니다")
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            raise HTTPException(status_code=400, detail="텍스트로 읽을 수 없는 파일입니다 (.txt, .md만 지원)")
+        parsed_chapters = _parse_chapters_from_text(text)
+    else:
+        parsed_chapters = _parse_chapters_json(chapters)
 
     document_id = str(uuid.uuid4())
     chapter_rows = _save_and_index_chapters(db, document_id, mentor_id, parsed_chapters)
