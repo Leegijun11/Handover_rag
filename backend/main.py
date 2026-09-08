@@ -32,6 +32,7 @@ from routers.user import router as user_router  # noqa: E402
 from models.chat import ChatLogORM  # noqa: E402, F401
 from models.report import AdaptationReportORM, ReportSectionORM  # noqa: E402, F401
 from models.document import DocumentChapterORM, DocumentMentorMapORM  # noqa: E402, F401
+from models.checklist import ChecklistItemORM  # noqa: E402, F401
 
 app = FastAPI(title="신입 업무보조 챗봇 API")
 
