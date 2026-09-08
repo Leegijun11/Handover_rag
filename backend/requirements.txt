@@ -1,14 +1,27 @@
-fastapi>=0.115
-uvicorn[standard]>=0.30
-pydantic>=2.9
-python-dotenv>=1.0
-SQLAlchemy>=2.0
-PyMySQL>=1.1
-cryptography>=41  # required by PyMySQL for MySQL 8 default auth (caching_sha2_password) - needed for Railway MySQL
-chromadb>=0.5
-openai>=1.50
-langgraph>=0.2
-PyJWT>=2.9
-passlib[bcrypt]>=1.7
-slowapi>=0.1.9
-python-multipart>=0.0.9
+# 버전 고정 이유 (LeeJongHoon, 조장 승인):
+# 이전에는 전부 하한(>=)만 걸려 있어서, 설치 시점에 따라 팀원마다 다른 메이저
+# 버전이 깔렸다. 실제로 openai 1.x를 상정한 스펙에서 3.x가, langgraph 0.x에서
+# 1.x가, chromadb 0.5에서 1.5가 설치됐다. fastapi도 0.115는 인증 헤더 누락 시
+# 403, 0.141은 401을 던져서 동작 자체가 갈렸다.
+# 아래 버전 조합은 Python 3.12 환경에서 서버 기동·인증·DB 테이블 생성까지
+# 실제로 검증한 값이다. 올릴 필요가 생기면 팀에 공유 후 함께 올린다.
+
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+pydantic==2.13.5
+python-dotenv==1.2.3
+SQLAlchemy==2.0.52
+PyMySQL==1.2.0
+# PyMySQL이 MySQL 8 기본 인증(caching_sha2_password)에 요구 — Railway MySQL 접속에 필수
+cryptography==50.0.1
+chromadb==1.5.9
+openai==3.8.0
+langgraph==1.2.11
+PyJWT==2.13.0
+# passlib[bcrypt]에서 교체 (조장 승인). passlib 1.7.4는 유지보수가 중단되어
+# bcrypt 4.1+에서 제거된 __about__ 속성을 읽으려다 백엔드 감지에 실패한다.
+# bcrypt 5.0.0과 조합하면 CryptContext.hash()가 ValueError로 실패해서 비밀번호
+# 해싱 자체가 불가능했다. core/auth.py는 bcrypt를 직접 호출한다.
+bcrypt==5.0.0
+slowapi==0.1.10
+python-multipart==0.0.32
