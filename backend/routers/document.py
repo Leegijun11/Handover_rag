@@ -4,7 +4,7 @@ import os
 import re
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from openai import OpenAI
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -17,10 +17,10 @@ from schemas.document import DocumentChapter
 
 router = APIRouter(tags=["document"])
 
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB (guidelines 5-9, 4-2)
 
 # ── 임베딩 헬퍼 ──
-# TODO(A): 조장과 임베딩 모델 확정되면 이 값만 교체
-EMBEDDING_MODEL = "text-embedding-3-small"
+EMBEDDING_MODEL = "text-embedding-3-small"  # 조장 core/llm.py의 EMBEDDING_MODEL과 동일 (4-2)
 _openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
@@ -50,7 +50,39 @@ def _chunk_text(text: str, chapter_title: str, chunk_size: int = 500, overlap: i
     return chunks
 
 
-# ── 요청 스키마 ──
+# ── 파일 자동파싱 헬퍼 ──
+_MD_HEADER_RE = re.compile(r"^(#{1,3})\s+(.+)$", re.MULTILINE)
+_NUMBERED_RE = re.compile(r"^((?:\d+[-.])+\d*\.?|제\s*\d+\s*장)\s*(.+)$", re.MULTILINE)
+
+
+def _parse_chapters_from_text(text: str) -> list[dict]:
+    """파일 본문에서 챕터 구조를 자동 인식. 실패하면 문서 전체를 챕터 1개로 폴백.
+
+    인식 순서: 마크다운 헤더(#, ##) -> 숫자/장 넘버링 -> 둘 다 없으면 폴백.
+    반환값 각 원소는 {"title": str, "content": str, "fallback": bool}.
+    """
+    text = text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="파일 내용이 비어 있습니다")
+
+    for pattern in (_MD_HEADER_RE, _NUMBERED_RE):
+        matches = list(pattern.finditer(text))
+        if len(matches) >= 2:
+            chapters = []
+            for i, m in enumerate(matches):
+                title = m.group(2).strip()
+                start = m.end()
+                end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+                content = text[start:end].strip()
+                if content:
+                    chapters.append({"title": title, "content": content, "fallback": False})
+            if chapters:
+                return chapters
+
+    return [{"title": "전체 내용", "content": text, "fallback": True}]
+
+
+# ── 요청 스키마 (직접입력 경로) ──
 class ChapterInput(BaseModel):
     title: str
     content: str
@@ -61,52 +93,51 @@ class UploadChaptersRequest(BaseModel):
     chapters: list[ChapterInput]
 
 
-# ── API ──
-@router.post("/document/upload", status_code=201)
-def upload_document(
-    payload: UploadChaptersRequest,
-    current_user: CurrentUser = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    require_role(current_user, "mentor")
-    require_self(current_user, payload.mentor_id)
-
-    document_id = str(uuid.uuid4())
-
-    # 1. 챕터 저장 (파싱 없이 그대로 — 직접입력 경로)
+def _save_and_index_chapters(
+    db: Session,
+    document_id: str,
+    mentor_id: str,
+    chapters: list[dict],
+) -> list[DocumentChapterORM]:
+    """챕터 저장 + mentor 매핑 기록 + 청킹->임베딩->ChromaDB 저장 (두 입력경로 공용)."""
     chapter_rows = []
-    for ch in payload.chapters:
+    for ch in chapters:
         row = DocumentChapterORM(
             chapter_id=str(uuid.uuid4()),
             document_id=document_id,
-            title=ch.title,
+            title=ch["title"],
             parent_id=None,
-            content=ch.content,
+            content=ch["content"],
         )
         db.add(row)
         chapter_rows.append(row)
 
-    # 2. document -> mentor 매핑 기록
-    db.add(DocumentMentorMapORM(document_id=document_id, mentor_id=payload.mentor_id))
+    db.add(DocumentMentorMapORM(document_id=document_id, mentor_id=mentor_id))
     db.commit()
 
-    # 3~4. 챕터별 청킹 -> 임베딩 -> ChromaDB 저장
     collection = get_collection(document_id)
-    for row in chapter_rows:
+    for row, ch in zip(chapter_rows, chapters):
         pieces = _chunk_text(row.content, row.title)
         vectors = _embed_texts(pieces)
-        chunk_ids = [str(uuid.uuid4()) for _ in pieces]  # DocumentChunk.chunk_id
+        chunk_ids = [str(uuid.uuid4()) for _ in pieces]
         collection.add(
             ids=chunk_ids,
             embeddings=vectors,
             documents=pieces,
             metadatas=[
-                {"document_id": document_id, "chapter_id": row.chapter_id, "fallback": False}
+                {
+                    "document_id": document_id,
+                    "chapter_id": row.chapter_id,
+                    "fallback": ch.get("fallback", False),
+                }
                 for _ in pieces
             ],
         )
+    return chapter_rows
 
-    chapters_response = [
+
+def _chapters_to_response(document_id: str, rows: list[DocumentChapterORM]) -> list[DocumentChapter]:
+    return [
         DocumentChapter(
             chapter_id=r.chapter_id,
             document_id=document_id,
@@ -114,9 +145,54 @@ def upload_document(
             parent_id=r.parent_id,
             content=r.content,
         )
-        for r in chapter_rows
+        for r in rows
     ]
-    return {"document_id": document_id, "chapters": chapters_response}
+
+
+# ── API ──
+@router.post("/document/upload", status_code=201)
+def upload_document(
+    payload: UploadChaptersRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """직접입력 경로 (chapters). 파일 업로드는 /document/upload/file 참고."""
+    require_role(current_user, "mentor")
+    require_self(current_user, payload.mentor_id)
+
+    document_id = str(uuid.uuid4())
+    chapters = [{"title": ch.title, "content": ch.content} for ch in payload.chapters]
+    chapter_rows = _save_and_index_chapters(db, document_id, payload.mentor_id, chapters)
+
+    return {"document_id": document_id, "chapters": _chapters_to_response(document_id, chapter_rows)}
+
+
+@router.post("/document/upload/file", status_code=201)
+async def upload_document_file(
+    mentor_id: str = Form(...),
+    file: UploadFile = File(...),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """파일 업로드 경로 (file). 목차 자동 파싱, 실패 시 챕터 1개로 폴백."""
+    require_role(current_user, "mentor")
+    require_self(current_user, mentor_id)
+
+    raw = await file.read()
+    if len(raw) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="파일 크기는 10MB를 초과할 수 없습니다")
+
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="텍스트로 읽을 수 없는 파일입니다 (.txt, .md만 지원)")
+
+    parsed_chapters = _parse_chapters_from_text(text)
+
+    document_id = str(uuid.uuid4())
+    chapter_rows = _save_and_index_chapters(db, document_id, mentor_id, parsed_chapters)
+
+    return {"document_id": document_id, "chapters": _chapters_to_response(document_id, chapter_rows)}
 
 
 @router.get("/document/{document_id}/chapters")
@@ -133,7 +209,6 @@ def get_chapters(
     is_owner_mentor = mapping is not None and mapping.mentor_id == current_user["user_id"]
 
     # TODO(A, B와 협의): 배정된 신입인지 확인 — Assignment 조회 준비되면 추가
-    # is_assigned_newcomer = ...
 
     if not is_owner_mentor:
         raise HTTPException(status_code=403, detail="권한이 없습니다")
@@ -143,13 +218,4 @@ def get_chapters(
         .filter(DocumentChapterORM.document_id == document_id)
         .all()
     )
-    return [
-        DocumentChapter(
-            chapter_id=r.chapter_id,
-            document_id=r.document_id,
-            title=r.title,
-            parent_id=r.parent_id,
-            content=r.content,
-        )
-        for r in rows
-    ]
+    return _chapters_to_response(document_id, rows)
