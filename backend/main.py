@@ -29,6 +29,8 @@ from routers.user import router as user_router  # noqa: E402
 # TODO(각 담당자): backend/models/*.py를 만들면 여기에 import 줄을 추가하세요
 # (예: from models.user import UserORM) — Base.metadata.create_all이 이 import들로
 # 등록된 테이블만 생성합니다 (guidelines 5-3-1, A-1).
+from models.chat import ChatLogORM  # noqa: E402, F401
+from models.report import AdaptationReportORM, ReportSectionORM  # noqa: E402, F401
 
 app = FastAPI(title="신입 업무보조 챗봇 API")
 
@@ -57,6 +59,17 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     return JSONResponse(status_code=429, content={"error": True, "message": f"요청이 너무 많습니다: {exc.detail}"})
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    # 위 세 핸들러가 못 잡는 나머지 전부(DB 연결 실패 등) — 이게 없으면 FastAPI 기본
+    # 500 텍스트 응답("Internal Server Error")으로 새서 3-7번 공통 포맷이 깨짐.
+    # 실제로 report/generate를 MySQL 없이 호출했을 때 이 문제가 재현되는 걸 확인하고 추가함.
+    import logging
+
+    logging.getLogger("uvicorn.error").error("Unhandled exception on %s %s", request.method, request.url, exc_info=exc)
+    return JSONResponse(status_code=500, content={"error": True, "message": "서버 내부 오류가 발생했습니다"})
 
 
 app.include_router(user_router)
