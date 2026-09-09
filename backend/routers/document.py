@@ -159,6 +159,16 @@ def _chapters_to_response(document_id: str, rows: list[DocumentChapterORM]) -> l
     ]
 
 
+def _get_assignment(db: Session, newcomer_id: str):
+    """models.assignment가 main에 merge되기 전에는 서버가 죽지 않도록 지연 import.
+    아직 없으면 None 반환 (신입 배정 검증을 못 하는 상태로 취급, 사수 검증만 동작)."""
+    try:
+        from models.assignment import get_assignment_by_newcomer
+    except ImportError:
+        return None
+    return get_assignment_by_newcomer(db, newcomer_id)
+
+
 # ── API ──
 @router.post("/document/upload", status_code=201)
 async def upload_document(
@@ -208,9 +218,12 @@ def get_chapters(
     )
     is_owner_mentor = mapping is not None and mapping.mentor_id == current_user["user_id"]
 
-    # TODO(A, B와 협의): 배정된 신입인지 확인 — Assignment 조회 준비되면 추가
+    assignment = _get_assignment(db, current_user["user_id"])
+    is_assigned_newcomer = (
+        assignment is not None and assignment.document_id == document_id
+    )
 
-    if not is_owner_mentor:
+    if not (is_owner_mentor or is_assigned_newcomer):
         raise HTTPException(status_code=403, detail="권한이 없습니다")
 
     rows = (
