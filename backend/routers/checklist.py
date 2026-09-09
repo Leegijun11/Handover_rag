@@ -63,7 +63,8 @@ def save_checklist(
 ):
     require_role(current_user, "mentor")
 
-    # TODO(A, B와 협의): chapter_id 연결 시 배정문서 챕터인지 검증 (Assignment 필요)
+    # TODO(A, B와 협의): chapter_id 연결 시 배정문서 챕터인지 검증
+    # (챕터의 document_id -> B의 Assignment.document_id 비교 필요, 세부 구현은 B 확정 후 진행)
 
     rows = []
     for item in payload.items:
@@ -152,3 +153,38 @@ def complete_checklist_item(
     row.completed_at = datetime.now(timezone.utc)
     db.commit()
     return {"status": "done", "completed_at": row.completed_at}
+
+
+@router.delete("/checklist/{item_id}", status_code=204)
+def delete_checklist_item(
+    item_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    require_role(current_user, "mentor")
+    row = db.query(ChecklistItemORM).filter(ChecklistItemORM.item_id == item_id).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다")
+
+    db.delete(row)
+    db.commit()
+    return None
+
+
+@router.post("/checklist/{item_id}/uncomplete")
+def uncomplete_checklist_item(
+    item_id: str,
+    payload: CompleteRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    require_self(current_user, payload.newcomer_id)
+
+    row = db.query(ChecklistItemORM).filter(ChecklistItemORM.item_id == item_id).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다")
+
+    row.status = "pending"
+    row.completed_at = None
+    db.commit()
+    return {"status": "pending", "completed_at": None}
