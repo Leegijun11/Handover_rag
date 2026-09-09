@@ -1,0 +1,1109 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>화면 목업 — 신입 업무보조 챗봇</title>
+<!--
+  화면 9개 목업 (담당: LeeJongHoon)
+
+  용도: JSX로 옮기기 전에 레이아웃·문구·상태를 눈으로 확정하기 위한 정적 파일.
+  frontend/src/ 밖에 둔 이유는 5-2의 폴더 구조가 고정이라서다. 이식이 끝나면
+  이 폴더째 지운다.
+
+  한 파일에 9개를 세로로 쌓은 이유: 공통 요소(셸/폼/버튼/카드)를 한 곳에서
+  고치면 9개 화면에 동시에 반영되고, 그 경계가 그대로 컴포넌트 경계가 된다.
+
+  섹션 하단의 [API] 줄은 이식할 때 붙일 services/router/*.js 함수다.
+  데이터는 전부 하드코딩된 예시값이다.
+-->
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-2: #fafbfc;
+    --border: #e3e6ea;
+    --border-strong: #cdd3da;
+    --text: #1b1f24;
+    --text-muted: #6b7480;
+    --text-faint: #949ca6;
+    --accent: #2f6feb;
+    --accent-hover: #2559c4;
+    --accent-soft: #eaf1fe;
+    --danger: #d1394a;
+    --danger-soft: #fdecee;
+    --success: #1f8a5b;
+    --success-soft: #e7f5ee;
+    --warn: #b8760a;
+    --warn-soft: #fdf3e2;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .08);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI",
+                 "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── 목업 전용 크롬 (이식 대상 아님) ───────────────────────── */
+  .mock-header {
+    position: sticky; top: 0; z-index: 20;
+    background: #16191d; color: #fff;
+    padding: 14px 24px;
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  }
+  .mock-header h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.2px; }
+  .mock-header p { margin: 0; font-size: 12px; color: #9aa3ad; }
+  .mock-nav { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+  .mock-nav a {
+    color: #c8cfd6; text-decoration: none; font-size: 12px;
+    padding: 3px 9px; border-radius: 999px; border: 1px solid #333a42;
+  }
+  .mock-nav a:hover { background: #262b31; color: #fff; }
+
+  .screen { max-width: 1180px; margin: 0 auto; padding: 40px 24px 8px; scroll-margin-top: 56px; }
+  .screen-label {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .screen-label h2 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -.2px; }
+  .screen-num {
+    font-size: 11px; font-weight: 700; color: #fff; background: #2b3138;
+    border-radius: 5px; padding: 2px 7px; letter-spacing: .4px;
+  }
+  .role-tag {
+    font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  }
+  .role-hr { background: var(--accent-soft); color: var(--accent-hover); }
+  .role-new { background: var(--success-soft); color: var(--success); }
+  .role-common { background: #eceff2; color: var(--text-muted); }
+
+  .api-note {
+    margin: 10px 0 0; font-size: 12px; line-height: 1.75; color: var(--text-muted);
+  }
+  .api-note b {
+    display: inline-block; min-width: 34px; color: var(--text-faint);
+    font-weight: 700; font-size: 11px; letter-spacing: .4px;
+  }
+  .api-note code {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 11.5px; color: var(--text); background: #eef1f4;
+    padding: 1px 5px; border-radius: 4px;
+  }
+
+  .frame {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow);
+  }
+
+  /* ── 앱 셸 (이식 대상: components/AppShell) ────────────────── */
+  .app-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 20px; height: 56px;
+    border-bottom: 1px solid var(--border); background: var(--surface);
+  }
+  .brand { font-weight: 800; font-size: 14px; letter-spacing: .6px; }
+  .brand span { color: var(--accent); }
+  .wordmark {
+    display: block; text-align: center;
+    font-size: 26px; font-weight: 800; letter-spacing: 3px;
+  }
+  .wordmark span { color: var(--accent); }
+  .tagline {
+    text-align: center; font-size: 12px; letter-spacing: .2px;
+    color: var(--text-faint); margin: 2px 0 0;
+  }
+  .app-header .spacer { margin-left: auto; }
+  .who { font-size: 13px; color: var(--text-muted); }
+  .who b { color: var(--text); font-weight: 600; }
+
+  .app-body { display: grid; grid-template-columns: 208px 1fr; min-height: 460px; }
+  .app-nav {
+    border-right: 1px solid var(--border); background: var(--surface-2);
+    padding: 16px 10px; display: flex; flex-direction: column; gap: 2px;
+  }
+  .app-nav a {
+    display: block; padding: 8px 10px; border-radius: 6px;
+    color: var(--text-muted); text-decoration: none; font-size: 13px;
+  }
+  .app-nav a:hover { background: #eef1f4; color: var(--text); }
+  .app-nav a[aria-current="page"] {
+    background: var(--accent-soft); color: var(--accent-hover); font-weight: 600;
+  }
+  .app-main { padding: 24px; min-width: 0; }
+
+  .page-title { margin: 0 0 4px; font-size: 18px; font-weight: 650; letter-spacing: -.3px; }
+  .page-desc { margin: 0 0 20px; color: var(--text-muted); font-size: 13px; }
+
+  .subject-bar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 11px 14px; margin-bottom: 20px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .subject-bar label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+  .subject-bar select { width: auto; min-width: 200px; }
+
+  /* ── 폼 (이식 대상: components/Field, components/Button) ───── */
+  .auth-wrap {
+    min-height: 480px; display: grid; place-items: center;
+    background: var(--surface-2); padding: 40px 20px;
+  }
+  .auth-card { width: 100%; max-width: 360px; }
+  .auth-card .brand { display: block; text-align: center; font-size: 17px; margin-bottom: 4px; }
+  .auth-sub { text-align: center; color: var(--text-muted); font-size: 13px; margin: 0 0 24px; }
+
+  .field { margin-bottom: 14px; }
+  .field > label {
+    display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px;
+  }
+  .field .hint { font-size: 12px; color: var(--text-faint); margin-top: 5px; }
+  .field .error { font-size: 12px; color: var(--danger); margin-top: 5px; }
+
+  input[type=text], input[type=email], input[type=password], select, textarea {
+    width: 100%; padding: 9px 11px; font: inherit; color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border-strong); border-radius: var(--radius);
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: 2px solid var(--accent-soft); border-color: var(--accent);
+  }
+  input[aria-invalid=true] { border-color: var(--danger); }
+  textarea { resize: vertical; min-height: 88px; line-height: 1.6; }
+
+  .radio-row { display: flex; gap: 8px; }
+  .radio-row label {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px;
+    padding: 9px; border: 1px solid var(--border-strong); border-radius: var(--radius);
+    font-size: 13px; cursor: pointer; background: var(--surface);
+  }
+  .radio-row input { accent-color: var(--accent); margin: 0; }
+  .radio-row label:has(input:checked) {
+    border-color: var(--accent); background: var(--accent-soft);
+    color: var(--accent-hover); font-weight: 600;
+  }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 9px 15px; font: inherit; font-weight: 600; font-size: 13px;
+    border-radius: var(--radius); border: 1px solid var(--border-strong);
+    background: var(--surface); color: var(--text); cursor: pointer;
+    text-decoration: none; white-space: nowrap;
+  }
+  .btn:hover { background: #f1f3f5; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-danger { color: var(--danger); border-color: #f0c2c8; background: var(--danger-soft); }
+  .btn-danger:hover { background: #fbdfe3; }
+  .btn-block { width: 100%; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  .auth-links {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 16px; font-size: 13px;
+  }
+  .auth-links a { color: var(--accent); text-decoration: none; }
+  .divider {
+    display: flex; align-items: center; gap: 10px;
+    margin: 20px 0 14px; color: var(--text-faint); font-size: 12px;
+  }
+  .divider::before, .divider::after {
+    content: ""; flex: 1; height: 1px; background: var(--border);
+  }
+
+  /* ── 공통 요소 ─────────────────────────────────────────────── */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px;
+  }
+  .app-main > .card + .card { margin-top: 12px; }
+  .card-title { font-weight: 650; font-size: 14px; margin: 0 0 10px; }
+
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+  .tabs button {
+    padding: 9px 14px; font: inherit; font-size: 13px; font-weight: 600;
+    background: none; border: none; border-bottom: 2px solid transparent;
+    color: var(--text-muted); cursor: pointer;
+  }
+  .tabs button[aria-selected=true] { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .badge {
+    display: inline-block; font-size: 11px; font-weight: 650;
+    padding: 2px 7px; border-radius: 999px; white-space: nowrap;
+  }
+  .badge-ai { background: var(--accent-soft); color: var(--accent-hover); }
+  .badge-manual { background: #eceff2; color: var(--text-muted); }
+  .badge-done { background: var(--success-soft); color: var(--success); }
+  .badge-warn { background: var(--warn-soft); color: var(--warn); }
+
+  .dropzone {
+    border: 1.5px dashed var(--border-strong); border-radius: var(--radius);
+    background: var(--surface-2); padding: 36px 20px; text-align: center;
+  }
+  .dropzone p { margin: 0 0 4px; font-weight: 600; }
+  .dropzone .hint { color: var(--text-faint); font-size: 12px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { font-size: 12px; color: var(--text-muted); font-weight: 600; background: var(--surface-2); }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .empty {
+    padding: 32px; text-align: center; color: var(--text-faint); font-size: 13px;
+    border: 1px dashed var(--border-strong); border-radius: var(--radius);
+    background: var(--surface-2);
+  }
+
+  .actions { display: flex; gap: 8px; margin-top: 16px; }
+  .actions-end { justify-content: flex-end; }
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* ── 데모 선택 ─────────────────────────────────────────────── */
+  .demo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .demo-card { display: flex; flex-direction: column; }
+  .demo-card h4 { margin: 0 0 2px; font-size: 15px; }
+  .demo-card .field-label { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+  .demo-card p {
+    margin: 0 0 16px; font-size: 13px; color: var(--text-muted); flex: 1;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .demo-card .actions { margin-top: 0; }
+  .demo-card .btn { flex: 1; }
+
+  /* ── 체크리스트 ────────────────────────────────────────────── */
+  .check-list { list-style: none; margin: 0; padding: 0; }
+  .check-list li {
+    display: flex; align-items: flex-start; gap: 11px;
+    padding: 13px 14px; border: 1px solid var(--border);
+    border-radius: var(--radius); background: var(--surface);
+  }
+  .check-list li + li { margin-top: 8px; }
+  .check-list input[type=checkbox] {
+    width: 17px; height: 17px; margin: 2px 0 0; accent-color: var(--accent); cursor: pointer;
+  }
+  .check-list .body { flex: 1; min-width: 0; }
+  .check-list .title { font-weight: 600; }
+  .check-list .meta { font-size: 12px; color: var(--text-faint); margin-top: 3px; }
+  .check-list li.done { background: var(--surface-2); }
+  .check-list li.done .title { color: var(--text-muted); text-decoration: line-through; }
+  .drag { color: var(--text-faint); cursor: grab; user-select: none; padding-top: 1px; }
+
+  /* ── 챗봇 ──────────────────────────────────────────────────── */
+  .chat { display: flex; flex-direction: column; height: 460px; }
+  .chat-log { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+  .msg { max-width: 74%; }
+  .msg .bubble { padding: 11px 14px; border-radius: var(--radius-lg); }
+  .msg-bot { align-self: flex-start; }
+  .msg-me { align-self: flex-end; }
+  .msg-me .bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 3px; }
+  .msg-bot .bubble {
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-bottom-left-radius: 3px;
+  }
+  .source::before {
+    content: ""; width: 3px; height: 11px; border-radius: 2px;
+    background: currentColor; opacity: .55;
+  }
+  .source {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 8px;
+    font-size: 12px; color: var(--accent-hover); background: var(--accent-soft);
+    padding: 3px 9px; border-radius: 999px; text-decoration: none;
+  }
+  .chat-input {
+    border-top: 1px solid var(--border); padding: 12px 16px;
+    display: flex; gap: 8px; background: var(--surface);
+  }
+  .chat-input input { flex: 1; }
+
+  /* ── 리포트 ────────────────────────────────────────────────── */
+  .signal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .signal h4 { margin: 0 0 2px; font-size: 14px; }
+  .signal .sig-key {
+    font-size: 11px; color: var(--text-faint); font-family: ui-monospace, Consolas, monospace;
+  }
+  .signal .summary { font-size: 13px; color: var(--text-muted); margin: 10px 0 14px; }
+  .bars { display: flex; flex-direction: column; gap: 7px; }
+  .bar-row { display: grid; grid-template-columns: 82px 1fr 28px; align-items: center; gap: 9px; font-size: 12px; }
+  .bar { height: 7px; border-radius: 999px; background: #e9edf1; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+  .bar-row .num { text-align: right; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .stat-row { display: flex; gap: 24px; }
+  .stat .n { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .k { font-size: 12px; color: var(--text-muted); }
+
+  .banner {
+    display: flex; gap: 10px; padding: 11px 13px; border-radius: var(--radius);
+    font-size: 13px; margin-bottom: 16px;
+  }
+  .banner-warn { background: var(--warn-soft); color: #7a4f05; }
+  .banner-info { background: var(--accent-soft); color: var(--accent-hover); }
+
+  @media (max-width: 860px) {
+    .app-body { grid-template-columns: 1fr; }
+    .app-nav { flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    .demo-grid, .signal-grid, .row-2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="mock-header">
+  <h1>화면 목업 — 신입 업무보조 챗봇</h1>
+  <p>정적 HTML · JSX 이식 전 확정용</p>
+  <nav class="mock-nav">
+    <a href="#s1">1 로그인</a>
+    <a href="#s2">2 회원가입</a>
+    <a href="#s3">3 데모</a>
+    <a href="#s4">4 업로드</a>
+    <a href="#s5">5 배정</a>
+    <a href="#s6">6 체크리스트관리</a>
+    <a href="#s7">7 리포트</a>
+    <a href="#s8">8 챗봇</a>
+    <a href="#s9">9 체크리스트</a>
+  </nav>
+</header>
+
+
+<!-- ══ 1. 로그인 ══════════════════════════════════════════════ -->
+<section class="screen" id="s1">
+  <div class="screen-label">
+    <span class="screen-num">01</span>
+    <h2>로그인</h2>
+    <span class="role-tag role-common">공통</span>
+  </div>
+
+  <div class="frame">
+    <div class="auth-wrap">
+      <div class="auth-card">
+        <span class="wordmark">HAND<span>OVER</span></span>
+        <p class="tagline">인수인계 업무보조 챗봇</p>
+        <p class="auth-sub" style="margin-top:18px">넘기는 사람도, 받는 사람도 편한 인수인계</p>
+
+        <div class="card">
+          <div class="field">
+            <label for="login-email">이메일</label>
+            <input type="email" id="login-email" placeholder="name@company.com">
+          </div>
+          <div class="field">
+            <label for="login-pw">비밀번호</label>
+            <input type="password" id="login-pw" placeholder="••••••••" aria-invalid="true">
+            <p class="error">이메일 또는 비밀번호가 올바르지 않습니다</p>
+          </div>
+          <button class="btn btn-primary btn-block">로그인</button>
+
+          <div class="divider">또는</div>
+          <button class="btn btn-block">데모로 체험하기</button>
+
+          <div class="auth-links">
+            <span style="color:var(--text-muted)">계정이 없으신가요?</span>
+            <a href="#s2">회원가입</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="api-note"><b>API</b> <code>user.login()</code> → localStorage에 <code>access_token</code> / <code>current_user</code> 저장 후 역할별 첫 화면으로 이동<br>
+  <b>메모</b> 401 문구는 "이메일이 없음"과 "비밀번호 틀림"을 구분하지 않는다 (서버가 같은 메시지를 준다)</p>
+</section>
+
+
+<!-- ══ 2. 회원가입 ════════════════════════════════════════════ -->
+<section class="screen" id="s2">
+  <div class="screen-label">
+    <span class="screen-num">02</span>
+    <h2>회원가입</h2>
+    <span class="role-tag role-common">공통</span>
+  </div>
+
+  <div class="frame">
+    <div class="auth-wrap">
+      <div class="auth-card">
+        <span class="brand">회원가입</span>
+        <p class="auth-sub">이메일 인증 없이 바로 시작합니다</p>
+
+        <div class="card">
+          <div class="field">
+            <label for="reg-name">이름</label>
+            <input type="text" id="reg-name" placeholder="홍길동">
+          </div>
+          <div class="field">
+            <label for="reg-email">이메일</label>
+            <input type="email" id="reg-email" placeholder="name@company.com">
+            <p class="hint">로그인할 때 쓰는 아이디입니다</p>
+          </div>
+          <div class="field">
+            <label for="reg-pw">비밀번호</label>
+            <input type="password" id="reg-pw" placeholder="8자 이상 입력하세요">
+            <p class="hint">영문·숫자·기호 8자 이상 (한글은 사용할 수 없습니다)</p>
+          </div>
+          <div class="field">
+            <label for="reg-pw2">비밀번호 확인</label>
+            <input type="password" id="reg-pw2" placeholder="한 번 더 입력하세요" aria-invalid="true">
+            <p class="error">비밀번호가 일치하지 않습니다</p>
+          </div>
+          <div class="field">
+            <label>역할</label>
+            <div class="radio-row">
+              <label><input type="radio" name="role" checked> 신입사원</label>
+              <label><input type="radio" name="role"> 사수</label>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-block" disabled>가입하기</button>
+          <p class="hint" style="text-align:center;margin-top:8px">
+            모든 항목을 채우고 비밀번호가 일치해야 눌립니다
+          </p>
+
+          <div class="auth-links">
+            <span style="color:var(--text-muted)">이미 계정이 있으신가요?</span>
+            <a href="#s1">로그인</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="api-note"><b>API</b> <code>user.register()</code> → 성공 시 곧바로 <code>user.login()</code> 호출해서 로그인 화면을 한 번 더 거치지 않게 한다<br>
+  <b>메모</b> 비밀번호 8자 미만은 서버가 <code>422</code>로 막는다. 같은 규칙을 프론트에서도 검사해서 왕복을 줄인다<br>
+  <b></b> 비밀번호 확인과 한글 차단은 프론트 전용 규칙이다 — 확인값은 서버로 보내지 않고, 서버는 아직 한글 비밀번호를 허용한다</p>
+</section>
+
+
+<!-- ══ 3. 데모 선택 ═══════════════════════════════════════════ -->
+<section class="screen" id="s3">
+  <div class="screen-label">
+    <span class="screen-num">03</span>
+    <h2>데모로 체험하기</h2>
+    <span class="role-tag role-common">공통</span>
+  </div>
+
+  <div class="frame">
+    <div class="app-header">
+      <span class="brand">HAND<span>OVER</span></span>
+      <div class="spacer"></div>
+      <a class="btn btn-sm" href="#s1">로그인 화면으로</a>
+    </div>
+    <div class="app-main">
+      <h3 class="page-title">회사를 선택하세요</h3>
+      <p class="page-desc">가입 없이 미리 채워둔 데이터로 전체 흐름을 체험할 수 있습니다. 사수와 신입 두 시점 모두 볼 수 있습니다.</p>
+
+      <div class="demo-grid">
+        <div class="card demo-card">
+          <h4>새싹커머스</h4>
+          <div class="field-label">이커머스 · 상품 운영</div>
+          <p>상품 등록과 정산 절차가 담긴 인수인계서. 체크리스트 5개, 질문 로그 12건이 쌓여 있습니다.</p>
+          <div class="actions">
+            <button class="btn btn-primary">신입으로 체험</button>
+            <button class="btn">사수로 체험</button>
+          </div>
+        </div>
+        <div class="card demo-card">
+          <h4>한빛물류</h4>
+          <div class="field-label">물류 · 배송 관제</div>
+          <p>배차와 사고 대응 매뉴얼. 완료 체크는 했지만 같은 업무를 계속 묻는 신입의 리포트가 준비돼 있습니다.</p>
+          <div class="actions">
+            <button class="btn btn-primary">신입으로 체험</button>
+            <button class="btn">사수로 체험</button>
+          </div>
+        </div>
+        <div class="card demo-card">
+          <h4>미래테크</h4>
+          <div class="field-label">SI · 백엔드 개발</div>
+          <p>배포 절차와 온콜 대응. 질문이 후반부에 끊긴 침묵 위험 사례를 볼 수 있습니다.</p>
+          <div class="actions">
+            <button class="btn btn-primary">신입으로 체험</button>
+            <button class="btn">사수로 체험</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="api-note"><b>API</b> 새 API 없음 — 프론트에 하드코딩된 데모 계정으로 <code>user.login()</code>을 그대로 재사용 (guidelines 1-8, 6-6)<br>
+  <b>메모</b> 계정 6개(<code>demo-newcomer-a/b/c, demo-mentor-a/b/c</code>)는 <code>seed_demo.py</code>가 고정 id로 만든다. 사수 체험이 필요한 이유는 리포트 화면이 사수 전용이기 때문</p>
+</section>
+
+
+<!-- ══ 4. 인수인계서 업로드 ═══════════════════════════════════ -->
+<section class="screen" id="s4">
+  <div class="screen-label">
+    <span class="screen-num">04</span>
+    <h2>인수인계서 업로드</h2>
+    <span class="role-tag role-hr">사수</span>
+  </div>
+
+  <div class="frame">
+    <div class="app-header">
+      <span class="brand">HAND<span>OVER</span></span>
+      <div class="spacer"></div>
+      <span class="who"><b>김사수</b> 님 · 사수</span>
+      <button class="btn btn-sm">로그아웃</button>
+    </div>
+    <div class="app-body">
+      <nav class="app-nav">
+        <a href="#s4" aria-current="page">인수인계서 업로드</a>
+        <a href="#s5">신입 배정</a>
+        <a href="#s6">체크리스트 관리</a>
+        <a href="#s7">적응도 리포트</a>
+      </nav>
+      <div class="app-main">
+        <h3 class="page-title">인수인계서 업로드</h3>
+        <p class="page-desc">챗봇이 답변의 근거로 삼을 문서입니다. 업로드하면 업무 단위로 나눠 저장됩니다.</p>
+
+        <div class="tabs">
+          <button aria-selected="true">파일 업로드</button>
+          <button aria-selected="false">직접 입력</button>
+        </div>
+
+        <!-- 탭 A: 파일 업로드 -->
+        <div class="dropzone">
+          <p>파일을 끌어다 놓거나 클릭해서 선택하세요</p>
+          <span class="hint">.txt, .md · 최대 10MB · 목차를 자동으로 인식합니다</span>
+        </div>
+        <div class="actions actions-end">
+          <button class="btn btn-primary">업로드</button>
+        </div>
+
+        <!-- 탭 B: 직접 입력 (탭 전환 시 위 영역과 교체) -->
+        <div class="card" style="margin-top:28px">
+          <p class="card-title">직접 입력 탭 (전환 시 표시)</p>
+          <div class="field">
+            <label>업무 1 · 제목</label>
+            <input type="text" value="상품 등록 절차">
+          </div>
+          <div class="field">
+            <label>업무 1 · 내용</label>
+            <textarea>신규 상품은 어드민 &gt; 상품관리 &gt; 등록에서 추가한다. 카테고리는 2depth까지 필수이며...</textarea>
+          </div>
+          <div class="field">
+            <label>업무 2 · 제목</label>
+            <input type="text" value="정산 마감 일정">
+          </div>
+          <div class="field">
+            <label>업무 2 · 내용</label>
+            <textarea placeholder="인수인계할 내용을 적어주세요"></textarea>
+          </div>
+          <div class="actions">
+            <button class="btn">+ 업무 추가</button>
+            <div class="spacer" style="margin-left:auto"></div>
+            <button class="btn btn-primary">저장</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="api-note"><b>API</b> <code>document.uploadDocumentFile()</code> / <code>document.uploadDocumentChapters()</code> — 두 경로 모두 <code>multipart/form-data</code><br>
+  <b>메모</b> 임베딩까지 한 요청에서 처리돼 응답이 느리다. 업로드 버튼은 진행 상태를 표시하고 중복 제출을 막아야 한다</p>
+</section>
+
+
+<!-- ══ 5. 신입 배정 ═══════════════════════════════════════════ -->
+<section class="screen" id="s5">
+  <div class="screen-label">
+    <span class="screen-num">05</span>
+    <h2>담당 신입 배정</h2>
+    <span class="role-tag role-hr">사수</span>
+  </div>
+
+  <div class="frame">
+    <div class="app-header">
+      <span class="brand">HAND<span>OVER</span></span>
+      <div class="spacer"></div>
+      <span class="who"><b>김사수</b> 님 · 사수</span>
+      <button class="btn btn-sm">로그아웃</button>
+    </div>
+    <div class="app-body">
+      <nav class="app-nav">
+        <a href="#s4">인수인계서 업로드</a>
+        <a href="#s5" aria-current="page">신입 배정</a>
+        <a href="#s6">체크리스트 관리</a>
+        <a href="#s7">적응도 리포트</a>
+      </nav>
+      <div class="app-main">
+        <h3 class="page-title">담당 신입 배정</h3>
+        <p class="page-desc">신입은 배정된 문서 범위 안에서만 챗봇에 질문할 수 있습니다.</p>
+
+        <div class="card">
+          <p class="card-title">새 배정</p>
+          <div class="row-2">
+            <div class="field">
+              <label for="assign-new">신입사원</label>
+              <select id="assign-new">
+                <option>박신입 (new@company.com)</option>
+                <option>이신입 (new2@company.com)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="assign-doc">인수인계서</label>
+              <select id="assign-doc">
+                <option>상품 운영 인수인계서 (업무 7개)</option>
+                <option>정산 업무 인수인계서 (업무 4개)</option>
+              </select>
+            </div>
+          </div>
+          <div class="actions actions-end" style="margin-top:4px">
+            <button class="btn btn-primary">배정하기</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <p class="card-title">현재 배정 현황</p>
+          <table>
+            <thead>
+              <tr><th>신입사원</th><th>배정 문서</th><th>배정일</th><th></th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>박신입</td>
+                <td>상품 운영 인수인계서</td>
+                <td>2026-09-02</td>
+                <td style="text-align:right"><button class="btn btn-sm">문서 변경</button></td>
+              </tr>
+              <tr>
+                <td>이신입</td>
+                <td>정산 업무 인수인계서</td>
+                <td>2026-09-05</td>
+                <td style="text-align:right"><button class="btn btn-sm">문서 변경</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="banner banner-info" style="margin-top:16px">
+          문서를 바꿔도 배정일은 그대로 유지됩니다. 리포트 기간의 기준이 되기 때문입니다.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="api-note"><b>API</b> <code>assignment.getAssignmentsByMentor()</code> 로 목록, <code>assignment.createAssignment()</code> 로 신규·재배정<br>
+  <b>메모</b> 재배정도 같은 <code>POST /assignment</code>다 (기존 행의 document_id만 교체). 신입 이름은 assignment 응답에 없으므로 <code>user.getUser(newcomer_id)</code>로 따로 채운다</p>
+</section>
+
+
+<!-- ══ 6. 체크리스트 관리 ═════════════════════════════════════ -->
+<section class="screen" id="s6">
+  <div class="screen-label">
+    <span class="screen-num">06</span>
+    <h2>체크리스트 작성 / 수정</h2>
+    <span class="role-tag role-hr">사수</span>
+  </div>
+
+  <div class="frame">
+    <div class="app-header">
+      <span class="brand">HAND<span>OVER</span></span>
+      <div class="spacer"></div>
+      <span class="who"><b>김사수</b> 님 · 사수</span>
+      <button class="btn btn-sm">로그아웃</button>
+    </div>
+    <div class="app-body">
+      <nav class="app-nav">
+        <a href="#s4">인수인계서 업로드</a>
+        <a href="#s5">신입 배정</a>
+        <a href="#s6" aria-current="page">체크리스트 관리</a>
+        <a href="#s7">적응도 리포트</a>
+      </nav>
+      <div class="app-main">
+        <h3 class="page-title">체크리스트 관리</h3>
+        <p class="page-desc">배정한 신입을 골라 체크리스트를 작성합니다.</p>
+
+        <div class="subject-bar">
+          <label for="cl-subject">담당 신입</label>
+          <select id="cl-subject">
+            <option>박신입 · 상품 운영 인수인계서</option>
+            <option>이신입 · 정산 업무 인수인계서</option>
+          </select>
+          <span style="font-size:12px;color:var(--text-faint);margin-left:auto">
+            2026-09-02 배정 · 6개 중 2개 완료
+          </span>
+        </div>
+
+        <div class="card">
+          <p class="card-title">AI 초안</p>
+          <p style="margin:0 0 12px;font-size:13px;color:var(--text-muted)">
+            인수인계서에 적힌 업무를 읽고 후보를 뽑아옵니다. 승인하기 전까지는 저장되지 않습니다.
+          </p>
+          <button class="btn">인수인계서 기반 초안 생성</button>
+
+          <div style="margin-top:16px">
+            <ul class="check-list">
+              <li>
+                <input type="checkbox" checked>
+                <div class="body">
+                  <div class="title">상품 등록 절차 1회 실습해보기</div>
+                  <div class="meta">1-1 상품 등록 절차</div>
+                </div>
+                <span class="badge badge-ai">AI 초안</span>
+              </li>
+              <li>
+                <input type="checkbox" checked>
+                <div class="body">
+                  <div class="title">정산 마감일 캘린더에 등록하기</div>
+                  <div class="meta">2-1 정산 마감 일정</div>
+                </div>
+                <span class="badge badge-ai">AI 초안</span>
+              </li>
+              <li>
+                <input type="checkbox">
+                <div class="body">
+                  <div class="title">반품 처리 화면 둘러보기</div>
+                  <div class="meta">3-2 반품/교환</div>
+                </div>
+                <span class="badge badge-ai">AI 초안</span>
+              </li>
+            </ul>
+            <div class="actions actions-end">
+              <button class="btn">모두 해제</button>
+              <button class="btn btn-primary">선택한 2개 저장</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <p class="card-title">저장된 항목 <span class="badge badge-manual" style="margin-left:4px">3개</span></p>
+          <ul class="check-list">
+            <li>
+              <span class="drag">⠿</span>
+              <div class="body">
+                <div class="title">사내 계정 발급받기</div>
+                <div class="meta">연결된 업무 없음 · 직접 작성</div>
+              </div>
+              <button class="btn btn-sm">수정</button>
+              <button class="btn btn-sm btn-danger">삭제</button>
+            </li>
+            <li>
+              <span class="drag">⠿</span>
+              <div class="body">
+                <div class="title">상품 등록 절차 1회 실습해보기</div>
+                <div class="meta">1-1 상품 등록 절차 · AI 초안</div>
+              </div>
+              <button class="btn btn-sm">수정</button>
+              <button class="btn btn-sm btn-danger">삭제</button>
+            </li>
+            <li>
+              <span class="drag">⠿</span>
+              <div class="body">
+                <div class="title">주간 회의 참석하기</div>
+                <div class="meta">연결된 업무 없음 · 직접 작성</div>
+              </div>
+              <button class="btn btn-sm">수정</button>
+              <button class="btn btn-sm btn-danger">삭제</button>
+            </li>
+          </ul>
+
+          <div class="card" style="background:var(--surface-2);margin-top:14px">
+            <div class="row-2">
+              <div class="field" style="margin:0">
+                <label for="new-item">직접 추가</label>
+                <input type="text" id="new-item" placeholder="예: 배포 절차 문서 읽어보기">
+              </div>
+              <div class="field" style="margin:0">
+                <label for="new-chapter">연결할 업무 (선택)</label>
+                <select id="new-chapter">
+                  <option>연결 안 함</option>
+                  <option>1-1 상품 등록 절차</option>
+                  <option>2-1 정산 마감 일정</option>
+                </select>
+              </div>
+            </div>
+            <div class="actions actions-end">
+              <button class="btn btn-primary">추가</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="api-note"><b>API</b> <code>checklist.createDraft()</code> 로 미리보기 → 수정 → <code>checklist.createItem()</code> 으로 저장 · 순서변경/수정/삭제도 <code>checklist.js</code><br>
+  <b>메모</b> 초안 생성(조장)과 저장(팀원 A)은 다른 모듈이다. 초안은 응답만 받아 화면에 들고 있다가 승인한 것만 저장한다</p>
+</section>
+
+
+<!-- ══ 7. 적응도 리포트 ═══════════════════════════════════════ -->
+<section class="screen" id="s7">
+  <div class="screen-label">
+    <span class="screen-num">07</span>
+    <h2>적응도 리포트</h2>
+    <span class="role-tag role-hr">사수 전용</span>
+  </div>
+
+  <div class="frame">
+    <div class="app-header">
+      <span class="brand">HAND<span>OVER</span></span>
+      <div class="spacer"></div>
+      <span class="who"><b>김사수</b> 님 · 사수</span>
+      <button class="btn btn-sm">로그아웃</button>
+    </div>
+    <div class="app-body">
+      <nav class="app-nav">
+        <a href="#s4">인수인계서 업로드</a>
+        <a href="#s5">신입 배정</a>
+        <a href="#s6">체크리스트 관리</a>
+        <a href="#s7" aria-current="page">적응도 리포트</a>
+      </nav>
+      <div class="app-main">
+        <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
+          <div style="flex:1;min-width:240px">
+            <h3 class="page-title">적응도 리포트</h3>
+            <p class="page-desc">2026-09-02 ~ 2026-09-09 · 생성 2026-09-09 14:20</p>
+          </div>
+          <div class="actions" style="margin:0">
+            <select style="width:auto">
+              <option>박신입</option>
+              <option>이신입</option>
+            </select>
+            <select style="width:auto"><option>최신 리포트</option><option>2026-09-05 생성</option></select>
+            <button class="btn btn-primary">지금 다시 생성</button>
+          </div>
+        </div>
+
+        <div class="banner banner-warn">
+          이 화면은 사수에게만 보입니다. 신입 화면에는 리포트가 노출되지 않습니다.
+        </div>
+
+        <div class="signal-grid">
+          <div class="card signal">
+            <h4>질문 성장 곡선</h4>
+            <div class="sig-key">growth_curve</div>
+            <p class="summary">단순 사실 확인 질문이 줄고 판단이 필요한 질문이 늘고 있습니다. 업무 맥락을 파악해가는 단계로 보입니다.</p>
+            <div class="bars">
+              <div class="bar-row"><span>사실 확인</span><span class="bar"><i style="width:35%"></i></span><span class="num">7</span></div>
+              <div class="bar-row"><span>절차</span><span class="bar"><i style="width:60%"></i></span><span class="num">12</span></div>
+              <div class="bar-row"><span>판단</span><span class="bar"><i style="width:45%"></i></span><span class="num">9</span></div>
+              <div class="bar-row"><span>심화</span><span class="bar"><i style="width:15%"></i></span><span class="num">3</span></div>
+            </div>
+          </div>
+
+          <div class="card signal">
+            <h4>영역별 히트맵</h4>
+            <div class="sig-key">chapter_heatmap</div>
+            <p class="summary">정산 관련 업무에 질문이 몰려 있습니다. 이 영역은 문서만으로 파악하기 어려워 보입니다.</p>
+            <div class="bars">
+              <div class="bar-row"><span>2-1 정산 마감</span><span class="bar"><i style="width:100%"></i></span><span class="num">14</span></div>
+              <div class="bar-row"><span>1-1 상품 등록</span><span class="bar"><i style="width:50%"></i></span><span class="num">7</span></div>
+              <div class="bar-row"><span>3-2 반품/교환</span><span class="bar"><i style="width:28%"></i></span><span class="num">4</span></div>
+              <div class="bar-row"><span>4-1 CS 응대</span><span class="bar"><i style="width:14%"></i></span><span class="num">2</span></div>
+            </div>
+          </div>
+
+          <div class="card signal">
+            <h4>완료–이해 불일치</h4>
+            <div class="sig-key">gap_task</div>
+            <p class="summary">완료로 체크한 뒤에도 같은 영역을 계속 묻고 있는 항목이 있습니다. 한 번 더 짚어주면 좋겠습니다.</p>
+            <ul class="check-list">
+              <li class="done">
+                <div class="body">
+                  <div class="title" style="text-decoration:none;color:var(--text)">정산 마감일 캘린더에 등록하기</div>
+                  <div class="meta">완료 체크 후 질문 6건</div>
+                </div>
+                <span class="badge badge-warn">6</span>
+              </li>
+              <li class="done">
+                <div class="body">
+                  <div class="title" style="text-decoration:none;color:var(--text)">반품 처리 화면 둘러보기</div>
+                  <div class="meta">완료 체크 후 질문 2건</div>
+                </div>
+                <span class="badge badge-warn">2</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="card signal">
+            <h4>침묵 위험</h4>
+            <div class="sig-key">silence_risk</div>
+            <p class="summary">기간 후반부에 질문이 크게 줄었습니다. 스스로 해결하고 있을 수도 있지만, 막혀서 멈춘 것일 수도 있어 한 번 확인해보시길 권합니다.</p>
+            <div class="stat-row" style="margin-top:16px">
+              <div class="stat"><div class="n">23</div><div class="k">전반부 질문</div></div>
+              <div class="stat"><div class="n">5</div><div class="k">후반부 질문</div></div>
+              <div class="stat"><div class="n" style="color:var(--warn)">감지</div><div class="k">급감 여부</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <p class="card-title">생성 이력</p>
+          <table>
+            <thead><tr><th>생성 시각</th><th>기간</th><th></th></tr></thead>
+            <tbody>
+              <tr><td>2026-09-09 14:20</td><td>09-02 ~ 09-09</td><td style="text-align:right"><button class="btn btn-sm">보기</button></td></tr>
+              <tr><td>2026-09-05 10:02</td><td>09-02 ~ 09-05</td><td style="text-align:right"><button class="btn btn-sm">보기</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="api-note"><b>API</b> <code>report.getReport()</code> 최신 · <code>report.generateReport()</code> 생성 · <code>report.getHistory()</code> 이력<br>
+  <b>메모</b> 담당 신입 목록은 <code>assignment.getAssignmentsByMentor()</code>로 받고, 이름은 <code>user.getUser(newcomer_id)</code>로 따로 조회한다 (통합 API 없음)<br>
+  <b></b> 4개 신호의 signal_type은 서버가 주는 값 그대로다. 순서를 고정하려면 프론트에서 정렬한다. 생성은 OpenAI를 호출해 느리고 rate limit 대상이라 버튼을 잠가야 한다</p>
+</section>
+
+
+<!-- ══ 8. 챗봇 대화 ═══════════════════════════════════════════ -->
+<section class="screen" id="s8">
+  <div class="screen-label">
+    <span class="screen-num">08</span>
+    <h2>챗봇 대화</h2>
+    <span class="role-tag role-new">신입</span>
+  </div>
+
+  <div class="frame">
+    <div class="app-header">
+      <span class="brand">HAND<span>OVER</span></span>
+      <div class="spacer"></div>
+      <span class="who"><b>박신입</b> 님 · 사수 김사수</span>
+      <button class="btn btn-sm">로그아웃</button>
+    </div>
+    <div class="app-body">
+      <nav class="app-nav">
+        <a href="#s8" aria-current="page">챗봇에게 물어보기</a>
+        <a href="#s9">체크리스트</a>
+      </nav>
+      <div class="app-main" style="padding:0">
+        <div class="chat">
+          <div class="chat-log">
+            <div class="msg msg-bot">
+              <div class="bubble">
+                안녕하세요. 상품 운영 인수인계서를 읽었습니다.<br>
+                궁금한 걸 물어보세요.
+              </div>
+            </div>
+
+            <div class="msg msg-me">
+              <div class="bubble">정산 마감일이 언제예요?</div>
+            </div>
+
+            <div class="msg msg-bot">
+              <div class="bubble">
+                정산 마감은 매월 <b>말일 오후 6시</b>입니다. 마감 이후 등록된 건은 다음 달 정산으로 넘어가고,
+                예외 처리가 필요하면 재무팀에 별도로 요청해야 합니다.
+                <br>
+                <a class="source" href="#">2-1 정산 마감 일정</a>
+              </div>
+            </div>
+
+            <div class="msg msg-me">
+              <div class="bubble">퇴직연금은 어디서 신청해요?</div>
+            </div>
+
+            <div class="msg msg-bot">
+              <div class="bubble">
+                이 인수인계서에서는 관련 내용을 찾지 못했습니다.
+                사수님이나 담당 부서에 직접 확인해보시는 게 좋겠습니다.
+              </div>
+            </div>
+          </div>
+
+          <div class="chat-input">
+            <input type="text" placeholder="인수인계서에 대해 물어보세요">
+            <button class="btn btn-primary">보내기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="api-note"><b>API</b> <code>chat.ask()</code> → <code>{ answer, source_chapter_id, answered }</code><br>
+  <b>메모</b> <code>answered=false</code>일 때 문구에 "문서를 보강하겠다"는 취지를 넣지 않는다 (guidelines 1-7). 그건 사수 리포트에서만 다룬다. source_chapter_id가 null이면 출처 칩을 그리지 않는다</p>
+</section>
+
+
+<!-- ══ 9. 신입 체크리스트 ═════════════════════════════════════ -->
+<section class="screen" id="s9">
+  <div class="screen-label">
+    <span class="screen-num">09</span>
+    <h2>체크리스트 확인 / 완료</h2>
+    <span class="role-tag role-new">신입</span>
+  </div>
+
+  <div class="frame">
+    <div class="app-header">
+      <span class="brand">HAND<span>OVER</span></span>
+      <div class="spacer"></div>
+      <span class="who"><b>박신입</b> 님 · 사수 김사수</span>
+      <button class="btn btn-sm">로그아웃</button>
+    </div>
+    <div class="app-body">
+      <nav class="app-nav">
+        <a href="#s8">챗봇에게 물어보기</a>
+        <a href="#s9" aria-current="page">체크리스트</a>
+      </nav>
+      <div class="app-main">
+        <h3 class="page-title">체크리스트</h3>
+        <p class="page-desc">6개 중 2개 완료 · 사수 김사수 님이 작성했습니다</p>
+
+        <ul class="check-list">
+          <li class="done">
+            <input type="checkbox" checked>
+            <div class="body">
+              <div class="title">사내 계정 발급받기</div>
+              <div class="meta">2026-09-03 완료</div>
+            </div>
+            <span class="badge badge-done">완료</span>
+          </li>
+          <li class="done">
+            <input type="checkbox" checked>
+            <div class="body">
+              <div class="title">정산 마감일 캘린더에 등록하기</div>
+              <div class="meta">2026-09-05 완료 · 2-1 정산 마감 일정</div>
+            </div>
+            <span class="badge badge-done">완료</span>
+          </li>
+          <li>
+            <input type="checkbox">
+            <div class="body">
+              <div class="title">상품 등록 절차 1회 실습해보기</div>
+              <div class="meta">1-1 상품 등록 절차</div>
+            </div>
+          </li>
+          <li>
+            <input type="checkbox">
+            <div class="body">
+              <div class="title">반품 처리 화면 둘러보기</div>
+              <div class="meta">3-2 반품/교환</div>
+            </div>
+          </li>
+          <li>
+            <input type="checkbox">
+            <div class="body">
+              <div class="title">주간 회의 참석하기</div>
+              <div class="meta">연결된 업무 없음</div>
+            </div>
+          </li>
+          <li>
+            <input type="checkbox">
+            <div class="body">
+              <div class="title">CS 응대 템플릿 읽어보기</div>
+              <div class="meta">4-1 CS 응대</div>
+            </div>
+          </li>
+        </ul>
+
+        <div class="banner banner-info" style="margin-top:20px">
+          연결된 업무가 있는 항목은 눌러서 인수인계서 내용을 바로 볼 수 있습니다.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="api-note"><b>API</b> <code>checklist.getItems()</code> 목록 · <code>checklist.completeItem()</code> 완료 체크<br>
+  <b>메모</b> 완료 체크는 되돌릴 수 없는지 3-4를 확인할 것. 자기 신고라 검증하지 않는 게 설계 의도지만(1-7), 리포트의 <code>gap_task</code> 신호가 이 값을 쓴다</p>
+</section>
+
+<div style="height:60px"></div>
+
+</body>
+</html>
