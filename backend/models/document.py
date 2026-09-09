@@ -3,6 +3,7 @@
 import uuid
 
 from sqlalchemy import Column, String, Text
+from sqlalchemy.orm import Session
 
 from core.database import Base
 
@@ -27,3 +28,13 @@ class DocumentMentorMapORM(Base):
 
     document_id = Column(String(36), primary_key=True)
     mentor_id = Column(String(36), nullable=False, index=True)
+
+
+def get_document_owner(db: Session, document_id: str) -> str | None:
+    """이 문서를 업로드한 mentor_id 반환. B의 POST /assignment에서 소유권 검증용."""
+    mapping = (
+        db.query(DocumentMentorMapORM)
+        .filter(DocumentMentorMapORM.document_id == document_id)
+        .first()
+    )
+    return mapping.mentor_id if mapping else None
