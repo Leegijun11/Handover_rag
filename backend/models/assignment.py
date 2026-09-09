@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, String
+from sqlalchemy.orm import Session
 
 from core.database import Base
 
@@ -27,3 +28,20 @@ class AssignmentORM(Base):
     # /report/generate가 최초 리포트의 period_start 기본값으로 쓰는 기준이라,
     # 재배정마다 초기화되면 리포트 기간이 매번 리셋된다 (guidelines 2-2, 3-6).
     assigned_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+
+def get_assignment_by_newcomer(db: Session, newcomer_id: str) -> AssignmentORM | None:
+    """신입 1명의 활성 Assignment 조회 — 모듈 간 공용 헬퍼 (guidelines 3-9).
+
+    다른 담당자 라우터는 AssignmentORM을 직접 쿼리하지 말고 이 함수를 쓴다.
+    필요한 필드가 담당자마다 달라서 특정 컬럼이 아니라 행 전체를 반환한다.
+
+    - chat.py (조장)      : document_id  — 챗봇 검색 범위 확정 (없으면 404)
+    - report.py (조장)    : assigned_at  — 최초 리포트 period_start 기본값
+                            mentor_id    — 이 사수가 이 신입 담당인지 검증
+    - document.py (팀원 A): document_id  — 챕터 조회 권한 검증
+    - checklist.py (팀원 A): document_id — chapter_id가 배정 문서 소속인지 검증
+
+    newcomer_id는 unique 제약이 걸려 있어 결과는 항상 0건 또는 1건이다.
+    """
+    return db.query(AssignmentORM).filter(AssignmentORM.newcomer_id == newcomer_id).first()
