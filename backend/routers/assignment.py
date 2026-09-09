@@ -111,7 +111,10 @@ def create_assignment(
     return _to_assignment(assignment)
 
 
-@router.get("/assignment")
+# response_model=None: 반환 타입이 단건/리스트 유니온이라 그대로 두면 FastAPI가 이걸
+# 응답 모델로 추론해서 유니온 검증을 한 번 더 돌린다. 아래에서 이미 Assignment를 직접
+# 만들어 반환하므로 얻는 게 없고, 유니온 분기 실패로 500이 날 여지만 생긴다.
+@router.get("/assignment", response_model=None)
 def get_assignment(
     newcomer_id: str | None = None,
     mentor_id: str | None = None,
