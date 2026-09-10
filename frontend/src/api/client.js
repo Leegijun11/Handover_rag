@@ -49,7 +49,12 @@ apiClient.interceptors.request.use((config) => {
 function extractErrorMessage(error) {
   const data = error.response?.data;
   if (!data) {
-    return error.message || "네트워크 오류가 발생했습니다";
+    // 응답 자체가 없는 경우. 서버가 꺼져 있을 때뿐 아니라, 서버가 500을 보냈는데
+    // 브라우저가 CORS로 막았을 때도 여기로 온다 — main.py의 미처리 예외 핸들러는
+    // CORSMiddleware 바깥(ServerErrorMiddleware)에서 응답을 만들어서 500 응답에만
+    // Access-Control-Allow-Origin이 붙지 않는다. 둘을 구분할 방법이 없으므로
+    // 양쪽을 포괄하는 문구를 쓴다. (근본 해결은 조장님 main.py 쪽)
+    return "서버에 연결할 수 없거나 서버에서 오류가 발생했습니다";
   }
   if (typeof data.message === "string") {
     return data.message;
@@ -66,6 +71,15 @@ function extractErrorMessage(error) {
   return error.message || "알 수 없는 오류가 발생했습니다";
 }
 
+// 로그인/회원가입 요청 자체. 여기서 나오는 401은 "자격이 틀렸다"는 뜻이지
+// "세션이 만료됐다"가 아니므로, 아래 만료 처리를 태우면 안 된다.
+const AUTH_ENDPOINTS = ["/user/login", "/user/register"];
+
+function isAuthAttempt(config) {
+  const url = config?.url || "";
+  return AUTH_ENDPOINTS.some((path) => url.endsWith(path));
+}
+
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -74,7 +88,11 @@ apiClient.interceptors.response.use(
     // 토큰 만료(JWT_EXPIRE_MINUTES=1440, 24시간) 또는 위조 시 401.
     // 저장된 토큰을 지우고 로그인 화면으로 보낸다 — 이 처리가 없으면
     // 하루 뒤 재접속한 사용자는 모든 요청이 조용히 실패하는 화면에 갇힌다.
-    if (status === 401) {
+    //
+    // 로그인 시도 실패는 제외한다. 데모 화면에서 자격이 틀렸을 때 화면이 통째로
+    // /login으로 넘어가버려서, 왜 안 됐는지 알려주는 안내가 보이지도 않았다.
+    // (로그인 화면 자신은 pathname 검사에 걸려 우연히 멀쩡했을 뿐이다.)
+    if (status === 401 && !isAuthAttempt(error.config)) {
       localStorage.removeItem(TOKEN_STORAGE_KEY);
       localStorage.removeItem(USER_STORAGE_KEY);
       if (!window.location.pathname.startsWith("/login")) {
