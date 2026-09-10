@@ -275,6 +275,7 @@ function ChecklistManagePage() {
   }
 
   const draftChosen = draft?.filter((d) => d.checked).length ?? 0;
+  const subChapters = newTopId ? outline.childrenOf.get(newTopId) || [] : [];
 
   return (
     <>
@@ -470,66 +471,53 @@ function ChecklistManagePage() {
               {/* 업무(대분류)를 먼저 고르고 할 일(소분류)을 적는 2단계.
                   드롭다운이 아니라 버튼으로 편 이유는, 어떤 업무들이 있는지 자체가
                   "무엇을 시킬까"의 힌트이기 때문이다. 펼쳐놔야 눈에 들어온다. */}
-              <div className="field">
-                <label>대분류 · 어떤 장(章)의 업무인가요?</label>
-                <div className="chip-group">
-                  <button
-                    type="button"
-                    className={!newTopId ? "active" : undefined}
-                    onClick={() => {
-                      setNewTopId("");
-                      setNewSubId("");
-                    }}
-                  >
-                    연결 안 함
-                  </button>
-                  {outline.tops.map((chapter) => (
-                    <button
-                      type="button"
-                      key={chapter.chapter_id}
-                      className={newTopId === chapter.chapter_id ? "active" : undefined}
-                      onClick={() => {
-                        setNewTopId(chapter.chapter_id);
+              {/* 업무 선택은 두 단계로 나눈다. 대분류를 고르면 소분류 목록이 그 아래
+                  절만 남게 좁혀진다. 지금은 parent_id가 채워지지 않아 소분류가 비는데,
+                  그 경우 두 번째 박스는 잠긴 채로 안내만 띄운다. */}
+              <div className="row-2">
+                <Field label="대분류">
+                  {(props) => (
+                    <select
+                      {...props}
+                      value={newTopId}
+                      onChange={(e) => {
+                        setNewTopId(e.target.value);
                         setNewSubId("");
                       }}
                     >
-                      <b>{outline.numbers.get(chapter.chapter_id)}</b>
-                      {chapter.title}
-                    </button>
-                  ))}
-                </div>
-                {!chapters.length && (
-                  <p className="hint">인수인계서에 등록된 업무가 없어 연결할 대상이 없습니다.</p>
-                )}
-              </div>
-
-              {/* 소분류 줄은 고른 대분류에 하위 절이 있을 때만 나온다.
-                  지금은 parent_id가 채워지지 않아 대부분 이 줄이 뜨지 않는다. */}
-              {newTopId && (outline.childrenOf.get(newTopId) || []).length > 0 && (
-                <div className="field">
-                  <label>소분류 · 어느 절(節)인가요?</label>
-                  <div className="chip-group">
-                    <button
-                      type="button"
-                      className={!newSubId ? "active" : undefined}
-                      onClick={() => setNewSubId("")}
+                      <option value="">연결 안 함</option>
+                      {outline.tops.map((chapter) => (
+                        <option key={chapter.chapter_id} value={chapter.chapter_id}>
+                          {outline.numbers.get(chapter.chapter_id)}. {chapter.title}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </Field>
+                <Field label="소분류">
+                  {(props) => (
+                    <select
+                      {...props}
+                      value={newSubId}
+                      disabled={subChapters.length === 0}
+                      onChange={(e) => setNewSubId(e.target.value)}
                     >
-                      장 전체
-                    </button>
-                    {(outline.childrenOf.get(newTopId) || []).map((sub) => (
-                      <button
-                        type="button"
-                        key={sub.chapter_id}
-                        className={newSubId === sub.chapter_id ? "active" : undefined}
-                        onClick={() => setNewSubId(sub.chapter_id)}
-                      >
-                        <b>{outline.numbers.get(sub.chapter_id)}</b>
-                        {sub.title}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+                      <option value="">
+                        {!newTopId
+                          ? "대분류를 먼저 고르세요"
+                          : subChapters.length === 0
+                            ? "하위 업무 없음"
+                            : "대분류 전체"}
+                      </option>
+                      {subChapters.map((sub) => (
+                        <option key={sub.chapter_id} value={sub.chapter_id}>
+                          {outline.numbers.get(sub.chapter_id)}. {sub.title}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </Field>
+              </div>
 
               <Field
                 label="할 일"

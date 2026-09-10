@@ -216,24 +216,7 @@ label.title { cursor: pointer; }
 .edit-row { display: flex; gap: 8px; width: 100%; align-items: center; }
 .edit-row input { flex: 1; }
 
-/* 대분류 고르기 — 드롭다운 대신 펼쳐두는 버튼 묶음.
-   어떤 업무가 있는지가 곧 "무엇을 시킬까"의 힌트라서 접어두면 안 보인다. */
-.chip-group { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip-group button {
-  font: inherit; font-size: 12.5px; color: var(--text-muted);
-  background: var(--surface); border: 1px solid var(--border-strong);
-  padding: 6px 12px; border-radius: 999px; cursor: pointer; text-align: left;
-}
-.chip-group button:hover { background: #f1f3f5; color: var(--text); }
-/* 앞의 번호(1, 2-1 …)는 목차 순서를 그대로 보여준다 */
-.chip-group button b {
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 11px; font-weight: 700; margin-right: 6px; opacity: .65;
-}
-.chip-group button.active {
-  background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
-}
-.chip-group button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+select:disabled { background: var(--surface-2); color: var(--text-faint); cursor: not-allowed; }
 
 .reorder { display: flex; flex-direction: column; gap: 2px; }
 .reorder button {
