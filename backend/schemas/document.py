@@ -6,7 +6,7 @@ class DocumentChapter(BaseModel):
     document_id: str
     title: str
     parent_id: str | None
-    content: str
+    content: str | None  # 순수 그룹핑용 상위 챕터는 None (guidelines 2-3)
 
 
 class DocumentChunk(BaseModel):
