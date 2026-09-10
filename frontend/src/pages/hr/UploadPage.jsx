@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { uploadDocumentChapters, uploadDocumentFile } from "../../services/router/document";
 import { getCurrentUser } from "../../api/session";
+import { rememberUploadedDocument } from "../../api/documentHistory";
 import Button from "../../components/common/Button";
 import Field from "../../components/common/Field";
 
@@ -62,6 +63,12 @@ function UploadPage() {
               })),
             );
       setResult(data);
+      // 문서 목록 API가 없어서, 배정 화면이 쓸 수 있도록 여기서 받은 document_id를
+      // 브라우저에 남긴다 (api/documentHistory.js 주석 참고).
+      rememberUploadedDocument(mentor.user_id, {
+        documentId: data.document_id,
+        chapterTitles: (data.chapters || []).map((c) => c.title),
+      });
       // 성공한 입력은 비워서, 같은 문서를 두 번 올리는 실수를 줄인다.
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
