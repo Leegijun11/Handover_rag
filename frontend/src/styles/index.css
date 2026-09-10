@@ -69,6 +69,15 @@ body {
 .page-title { margin: 0 0 4px; font-size: 18px; font-weight: 650; letter-spacing: -.3px; }
 .page-desc { margin: 0 0 20px; color: var(--text-muted); font-size: 13px; }
 
+.subject-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 11px 14px; margin-bottom: 20px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.subject-bar label { font-size: 12px; font-weight: 600; color: var(--text-muted); margin: 0; }
+.subject-bar select { width: auto; min-width: 200px; }
+
 /* ── 인증 화면 ─────────────────────────────────────────────────── */
 .auth-wrap {
   min-height: 100vh; display: grid; place-items: center;
@@ -181,6 +190,44 @@ textarea { resize: vertical; min-height: 88px; line-height: 1.6; }
 }
 .demo-card .actions { margin-top: 0; }
 .demo-card .btn { flex: 1; }
+
+/* ── 체크리스트 ────────────────────────────────────────────────── */
+.check-list { list-style: none; margin: 0; padding: 0; }
+.check-list li {
+  display: flex; align-items: flex-start; gap: 11px;
+  padding: 13px 14px; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--surface);
+}
+.check-list li + li { margin-top: 8px; }
+.check-list input[type=checkbox] {
+  width: 17px; height: 17px; margin: 2px 0 0; accent-color: var(--accent); cursor: pointer;
+}
+.check-list .body { flex: 1; min-width: 0; }
+.check-list .title { font-weight: 600; }
+.check-list .meta { font-size: 12px; color: var(--text-faint); margin-top: 3px; }
+.check-list li.done { background: var(--surface-2); }
+.check-list li.done .title { color: var(--text-muted); text-decoration: line-through; }
+
+.edit-row { display: flex; gap: 8px; width: 100%; align-items: center; }
+.edit-row input { flex: 1; }
+
+.reorder { display: flex; flex-direction: column; gap: 2px; }
+.reorder button {
+  width: 20px; height: 16px; padding: 0; line-height: 1;
+  font-size: 9px; color: var(--text-faint); cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px;
+}
+.reorder button:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
+.reorder button:disabled { opacity: .35; cursor: not-allowed; }
+
+.badge {
+  display: inline-block; font-size: 11px; font-weight: 650;
+  padding: 2px 7px; border-radius: 999px; white-space: nowrap;
+}
+.badge-ai { background: var(--accent-soft); color: var(--accent-hover); }
+.badge-manual { background: #eceff2; color: var(--text-muted); }
+.badge-done { background: var(--success-soft); color: var(--success); }
+.badge-warn { background: var(--warn-soft); color: var(--warn); }
 
 /* ── 공통 요소 ─────────────────────────────────────────────────── */
 .card {
