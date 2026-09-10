@@ -225,6 +225,11 @@ label.title { cursor: pointer; }
   padding: 6px 12px; border-radius: 999px; cursor: pointer; text-align: left;
 }
 .chip-group button:hover { background: #f1f3f5; color: var(--text); }
+/* 앞의 번호(1, 2-1 …)는 목차 순서를 그대로 보여준다 */
+.chip-group button b {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px; font-weight: 700; margin-right: 6px; opacity: .65;
+}
 .chip-group button.active {
   background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
 }

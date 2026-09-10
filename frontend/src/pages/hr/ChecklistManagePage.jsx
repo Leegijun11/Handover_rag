@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   deleteChecklistItem,
   draftChecklist,
@@ -35,7 +35,9 @@ function ChecklistManagePage() {
   // 계속 보면서 고칠 수 있고, 브라우저 모달이 화면을 막지도 않는다.
   const [editing, setEditing] = useState(null); // { itemId, title }
   const [newTitle, setNewTitle] = useState("");
-  const [newChapterId, setNewChapterId] = useState("");
+  // 대분류(장)와 소분류(절)를 따로 들고, 저장할 때 더 좁은 쪽을 chapter_id로 쓴다.
+  const [newTopId, setNewTopId] = useState("");
+  const [newSubId, setNewSubId] = useState("");
   const [busy, setBusy] = useState(false);
   const [viewingChapterId, setViewingChapterId] = useState(null);
 
@@ -76,9 +78,45 @@ function ChecklistManagePage() {
     };
   }, [documentId]);
 
+  /**
+   * 업무의 장-절 구조를 푼다.
+   *
+   * DocumentChapter.parent_id가 계층을 담는 필드인데(guidelines 2), 지금 팀원 A의
+   * 업로드 파이프라인은 이 값을 항상 None으로 저장한다. 그래서 실제로는 전부
+   * 대분류로만 들어온다 — 그 경우 소분류 줄은 나오지 않고 한 단계로 동작한다.
+   * parent_id가 채워지면 코드 변경 없이 두 단계로 늘어난다.
+   */
+  const outline = useMemo(() => {
+    const byId = new Map(chapters.map((c) => [c.chapter_id, c]));
+    // parent가 목록에 없는 챕터는 고아로 두지 않고 대분류로 취급한다.
+    const isTop = (c) => !c.parent_id || !byId.has(c.parent_id);
+
+    const tops = chapters.filter(isTop);
+    const childrenOf = new Map(
+      tops.map((top) => [
+        top.chapter_id,
+        chapters.filter((c) => !isTop(c) && c.parent_id === top.chapter_id),
+      ]),
+    );
+
+    // 화면에 보여줄 번호 (1, 2 / 1-1, 1-2). chapter_id가 UUID라 순서로 매긴다.
+    const numbers = new Map();
+    tops.forEach((top, i) => {
+      numbers.set(top.chapter_id, String(i + 1));
+      (childrenOf.get(top.chapter_id) || []).forEach((sub, j) => {
+        numbers.set(sub.chapter_id, `${i + 1}-${j + 1}`);
+      });
+    });
+
+    return { tops, childrenOf, numbers, hasDepth: tops.length !== chapters.length };
+  }, [chapters]);
+
   function chapterTitle(chapterId) {
     if (!chapterId) return "연결된 업무 없음";
-    return chapters.find((c) => c.chapter_id === chapterId)?.title || chapterId;
+    const chapter = chapters.find((c) => c.chapter_id === chapterId);
+    if (!chapter) return chapterId;
+    const number = outline.numbers.get(chapterId);
+    return number ? `${number}. ${chapter.title}` : chapter.title;
   }
 
   const nextOrder = items.reduce((max, item) => Math.max(max, item.order ?? 0), 0) + 1;
@@ -160,14 +198,16 @@ function ChecklistManagePage() {
       await saveChecklist([
         {
           newcomer_id: newcomerId,
-          chapter_id: newChapterId || null,
+          // 소분류까지 골랐으면 그쪽이 더 정확한 연결이다.
+          chapter_id: newSubId || newTopId || null,
           title: newTitle.trim(),
           order: nextOrder,
           source: "manual",
         },
       ]);
       setNewTitle("");
-      setNewChapterId("");
+      setNewTopId("");
+      setNewSubId("");
       setNotice("항목을 추가했습니다.");
       await loadItems();
     } catch (err) {
@@ -431,41 +471,77 @@ function ChecklistManagePage() {
                   드롭다운이 아니라 버튼으로 편 이유는, 어떤 업무들이 있는지 자체가
                   "무엇을 시킬까"의 힌트이기 때문이다. 펼쳐놔야 눈에 들어온다. */}
               <div className="field">
-                <label>대분류 · 어떤 업무인가요?</label>
+                <label>대분류 · 어떤 장(章)의 업무인가요?</label>
                 <div className="chip-group">
                   <button
                     type="button"
-                    className={!newChapterId ? "active" : undefined}
-                    onClick={() => setNewChapterId("")}
+                    className={!newTopId ? "active" : undefined}
+                    onClick={() => {
+                      setNewTopId("");
+                      setNewSubId("");
+                    }}
                   >
                     연결 안 함
                   </button>
-                  {chapters.map((chapter) => (
+                  {outline.tops.map((chapter) => (
                     <button
                       type="button"
                       key={chapter.chapter_id}
-                      className={newChapterId === chapter.chapter_id ? "active" : undefined}
-                      onClick={() => setNewChapterId(chapter.chapter_id)}
+                      className={newTopId === chapter.chapter_id ? "active" : undefined}
+                      onClick={() => {
+                        setNewTopId(chapter.chapter_id);
+                        setNewSubId("");
+                      }}
                     >
+                      <b>{outline.numbers.get(chapter.chapter_id)}</b>
                       {chapter.title}
                     </button>
                   ))}
                 </div>
-                <p className="hint">
-                  {chapters.length
-                    ? "업무를 연결하면 신입이 그 본문을 바로 열어볼 수 있고, 리포트의 완료–이해 불일치 신호에도 잡힙니다."
-                    : "인수인계서에 등록된 업무가 없어 연결할 대상이 없습니다."}
-                </p>
+                {!chapters.length && (
+                  <p className="hint">인수인계서에 등록된 업무가 없어 연결할 대상이 없습니다.</p>
+                )}
               </div>
 
-              <Field label="소분류 · 신입이 할 일">
+              {/* 소분류 줄은 고른 대분류에 하위 절이 있을 때만 나온다.
+                  지금은 parent_id가 채워지지 않아 대부분 이 줄이 뜨지 않는다. */}
+              {newTopId && (outline.childrenOf.get(newTopId) || []).length > 0 && (
+                <div className="field">
+                  <label>소분류 · 어느 절(節)인가요?</label>
+                  <div className="chip-group">
+                    <button
+                      type="button"
+                      className={!newSubId ? "active" : undefined}
+                      onClick={() => setNewSubId("")}
+                    >
+                      장 전체
+                    </button>
+                    {(outline.childrenOf.get(newTopId) || []).map((sub) => (
+                      <button
+                        type="button"
+                        key={sub.chapter_id}
+                        className={newSubId === sub.chapter_id ? "active" : undefined}
+                        onClick={() => setNewSubId(sub.chapter_id)}
+                      >
+                        <b>{outline.numbers.get(sub.chapter_id)}</b>
+                        {sub.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <Field
+                label="할 일"
+                hint="업무를 연결하면 신입이 그 본문을 바로 열어볼 수 있고, 리포트의 완료–이해 불일치 신호에도 잡힙니다."
+              >
                 {(props) => (
                   <input
                     {...props}
                     type="text"
                     placeholder={
-                      newChapterId
-                        ? `예: ${chapterTitle(newChapterId)} 절차대로 1회 해보기`
+                      newSubId || newTopId
+                        ? `예: ${chapterTitle(newSubId || newTopId)} 절차대로 1회 해보기`
                         : "예: 주간 회의 참석하기"
                     }
                     value={newTitle}
