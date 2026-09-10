@@ -60,6 +60,10 @@ def _make_load_chapters_node(db: Session):
 def _node_generate_tasks(state: DraftState) -> DraftState:
     items: list[dict] = []
     for chapter in state["chapters"]:
+        # 순수 그룹핑용 상위 챕터(content=None)는 건너뜀 — LLM에 넘길 내용이 없음
+        # (guidelines 2-3, content 필드가 null 허용으로 바뀐 이유 참고)
+        if not chapter.get("content"):
+            continue
         raw = chat_complete(
             system_prompt=(
                 "너는 신입사원 온보딩 체크리스트를 설계하는 사수다. 주어진 인수인계서 챕터를 "
