@@ -37,8 +37,19 @@ def _to_assignment(row: AssignmentORM) -> Assignment:
     )
 
 
-def _get_document_owner(db: Session, document_id: str) -> str | None:
+# 팀원 A 모듈이 아직 없는 상태와 "그런 문서가 없다"를 구분하기 위한 표식.
+# 둘 다 None으로 뭉뚱그리면, 병합 후에 존재하지도 않는 document_id로 보낸 배정 요청이
+# 소유권 검증을 통과해버린다 (팀원 A의 get_document_owner도 문서가 없으면 None을 준다).
+_DOCUMENT_MODULE_MISSING = object()
+
+
+def _get_document_owner(db: Session, document_id: str):
     """document_id를 업로드한 사수의 user_id (팀원 A 제공, guidelines 3-9).
+
+    반환값은 셋 중 하나다.
+      - str                        : 그 문서를 올린 사수의 user_id
+      - None                       : 그런 document_id가 없음
+      - _DOCUMENT_MODULE_MISSING   : 팀원 A 브랜치 병합 전이라 검증 자체가 불가
 
     지연 import인 이유: models/document.py는 팀원 A(feature/jaehwan) 소유라 아직 이
     브랜치에 없다. 모듈 최상단에서 import하면 병합 전까지 main.py 자체가 부팅에
@@ -55,7 +66,7 @@ def _get_document_owner(db: Session, document_id: str) -> str | None:
             "models/document.py가 없어 문서 소유권 검증을 건너뜁니다 "
             "(팀원 A 브랜치 병합 전 상태). 통합 테스트 전 반드시 확인할 것."
         )
-        return None
+        return _DOCUMENT_MODULE_MISSING
     return get_document_owner(db, document_id)
 
 
@@ -83,8 +94,15 @@ def create_assignment(
     # 사수 아무나 다른 회사 인수인계서를 자기 신입에게 붙일 수 있고, 그 신입은
     # GET /document/{id}/chapters로 본문 전체를 읽게 된다 (guidelines 3-9).
     owner_id = _get_document_owner(db, payload.document_id)
-    if owner_id is not None and owner_id != payload.mentor_id:
-        raise HTTPException(status_code=403, detail="본인이 업로드한 문서만 배정할 수 있습니다")
+    if owner_id is not _DOCUMENT_MODULE_MISSING:
+        if owner_id is None:
+            # 없는 문서로 배정하면 그 신입은 챗봇에서 아무것도 못 찾는 상태가 된다.
+            # 배정 시점에 막지 않으면 원인을 나중에 챗봇 쪽에서 찾게 된다.
+            raise HTTPException(status_code=404, detail="존재하지 않는 문서입니다")
+        if owner_id != payload.mentor_id:
+            raise HTTPException(
+                status_code=403, detail="본인이 업로드한 문서만 배정할 수 있습니다"
+            )
 
     existing = get_assignment_by_newcomer(db, payload.newcomer_id)
     if existing is not None:
