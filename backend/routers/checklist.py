@@ -54,6 +54,16 @@ def _to_schema(row: ChecklistItemORM) -> ChecklistItem:
     )
 
 
+def _get_assignment(db: Session, newcomer_id: str):
+    """models.assignment가 main에 merge되기 전에는 서버가 죽지 않도록 지연 import.
+    아직 없으면 None 반환."""
+    try:
+        from models.assignment import get_assignment_by_newcomer
+    except ImportError:
+        return None
+    return get_assignment_by_newcomer(db, newcomer_id)
+
+
 # ── API ──
 @router.post("/checklist", status_code=201)
 def save_checklist(
@@ -63,8 +73,30 @@ def save_checklist(
 ):
     require_role(current_user, "mentor")
 
-    # TODO(A, B와 협의): chapter_id 연결 시 배정문서 챕터인지 검증
-    # (챕터의 document_id -> B의 Assignment.document_id 비교 필요, 세부 구현은 B 확정 후 진행)
+    from models.document import DocumentChapterORM
+
+    assignment_cache: dict[str, object] = {}
+
+    def _get_cached_assignment(newcomer_id: str):
+        if newcomer_id not in assignment_cache:
+            assignment_cache[newcomer_id] = _get_assignment(db, newcomer_id)
+        return assignment_cache[newcomer_id]
+
+    for item in payload.items:
+        assignment = _get_cached_assignment(item.newcomer_id)
+        if assignment is None:
+            raise HTTPException(status_code=404, detail="배정된 인수인계서가 없습니다")
+        if assignment.mentor_id != current_user["user_id"]:
+            raise HTTPException(status_code=403, detail="담당 신입이 아닙니다")
+
+        if item.chapter_id is not None:
+            chapter = (
+                db.query(DocumentChapterORM)
+                .filter_by(chapter_id=item.chapter_id)
+                .first()
+            )
+            if chapter is None or chapter.document_id != assignment.document_id:
+                raise HTTPException(status_code=400, detail="배정된 문서의 챕터가 아닙니다")
 
     rows = []
     for item in payload.items:
@@ -110,6 +142,24 @@ def update_checklist_item(
     row = db.query(ChecklistItemORM).filter(ChecklistItemORM.item_id == item_id).first()
     if row is None:
         raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다")
+
+    assignment = _get_assignment(db, row.newcomer_id)
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="배정된 인수인계서가 없습니다")
+    if assignment.mentor_id != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="담당 신입이 아닙니다")
+
+    new_chapter_id = payload.chapter_id if payload.chapter_id is not None else row.chapter_id
+    if new_chapter_id is not None:
+        from models.document import DocumentChapterORM
+
+        chapter = (
+            db.query(DocumentChapterORM)
+            .filter_by(chapter_id=new_chapter_id)
+            .first()
+        )
+        if chapter is None or chapter.document_id != assignment.document_id:
+            raise HTTPException(status_code=400, detail="배정된 문서의 챕터가 아닙니다")
 
     if payload.title is not None:
         row.title = payload.title
