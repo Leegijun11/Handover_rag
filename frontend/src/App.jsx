@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { getCurrentUser, getToken, homePathFor } from "./api/session";
 import AppShell from "./components/common/AppShell";
+import NewcomerScope from "./components/common/NewcomerScope";
 import RequireAuth from "./components/common/RequireAuth";
 
 import LoginPage from "./pages/LoginPage";
@@ -19,6 +20,20 @@ function Shell({ role, children }) {
   return (
     <RequireAuth role={role}>
       <AppShell>{children}</AppShell>
+    </RequireAuth>
+  );
+}
+
+/**
+ * 신입 화면 전용 셸 — 셸 바깥에 NewcomerScope를 한 겹 더 씌운다.
+ * 배정 정보를 여기서 한 번만 받아 헤더(사수 이름)와 두 화면이 나눠 쓴다.
+ */
+function NewcomerShell({ children }) {
+  return (
+    <RequireAuth role="newcomer">
+      <NewcomerScope>
+        <AppShell>{children}</AppShell>
+      </NewcomerScope>
     </RequireAuth>
   );
 }
@@ -48,8 +63,8 @@ function App() {
         <Route path="/hr/report" element={<Shell role="mentor"><ReportPage /></Shell>} />
 
         {/* 신입 전용 */}
-        <Route path="/chat" element={<Shell role="newcomer"><ChatPage /></Shell>} />
-        <Route path="/checklist" element={<Shell role="newcomer"><ChecklistPage /></Shell>} />
+        <Route path="/chat" element={<NewcomerShell><ChatPage /></NewcomerShell>} />
+        <Route path="/checklist" element={<NewcomerShell><ChecklistPage /></NewcomerShell>} />
 
         <Route path="*" element={<Landing />} />
       </Routes>
