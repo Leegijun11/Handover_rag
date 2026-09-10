@@ -4,9 +4,11 @@ import {
   getAssignmentsByMentor,
 } from "../../services/router/assignment";
 import { getUser } from "../../services/router/user";
+import { getChapters } from "../../services/router/document";
 import { getCurrentUser } from "../../api/session";
 import { listUploadedDocuments } from "../../api/documentHistory";
 import Button from "../../components/common/Button";
+import ChapterViewer from "../../components/common/ChapterViewer";
 import Field from "../../components/common/Field";
 
 function formatDate(value) {
@@ -28,6 +30,10 @@ function AssignPage() {
   const [formError, setFormError] = useState("");
   const [notice, setNotice] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // 문서에는 이름 필드가 없어서 목록만 봐서는 어떤 문서인지 확신하기 어렵다.
+  // 눌렀을 때만 챕터를 받아와 본문을 보여준다.
+  const [viewing, setViewing] = useState(null); // { documentId, chapters }
+  const [viewingId, setViewingId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -81,6 +87,23 @@ function AssignPage() {
       setFormError(err.userMessage || "배정에 실패했습니다");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function openDocument(id) {
+    setViewingId(id);
+    setListError("");
+    try {
+      const { data } = await getChapters(id);
+      if (!data?.length) {
+        setListError("이 문서에 등록된 업무가 없습니다");
+        return;
+      }
+      setViewing({ documentId: id, chapters: data });
+    } catch (err) {
+      setListError(err.userMessage || "본문을 불러오지 못했습니다");
+    } finally {
+      setViewingId("");
     }
   }
 
@@ -188,7 +211,14 @@ function AssignPage() {
                     )}
                   </td>
                   <td>{formatDate(row.assigned_at)}</td>
-                  <td style={{ textAlign: "right" }}>
+                  <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                    <Button
+                      size="sm"
+                      disabled={viewingId === row.document_id}
+                      onClick={() => openDocument(row.document_id)}
+                    >
+                      {viewingId === row.document_id ? "여는 중…" : "본문 보기"}
+                    </Button>{" "}
                     <Button
                       size="sm"
                       onClick={() => {
@@ -211,6 +241,15 @@ function AssignPage() {
       <div className="banner banner-info" style={{ marginTop: 16 }}>
         문서를 바꿔도 배정일은 그대로 유지됩니다. 리포트 기간의 기준이 되기 때문입니다.
       </div>
+
+      {viewing && (
+        <ChapterViewer
+          chapters={viewing.chapters}
+          chapterId={viewing.chapters[0].chapter_id}
+          answer={null}
+          onClose={() => setViewing(null)}
+        />
+      )}
     </>
   );
 }

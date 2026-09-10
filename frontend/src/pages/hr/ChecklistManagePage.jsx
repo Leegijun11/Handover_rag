@@ -9,8 +9,10 @@ import {
 } from "../../services/router/checklist";
 import { getChapters } from "../../services/router/document";
 import { getCurrentUser } from "../../api/session";
+import { readingTaskTitle } from "../../api/handoverTemplate";
 import NewcomerPicker from "../../components/hr/NewcomerPicker";
 import Button from "../../components/common/Button";
+import ChapterViewer from "../../components/common/ChapterViewer";
 import Field from "../../components/common/Field";
 
 function ChecklistManagePage() {
@@ -23,8 +25,10 @@ function ChecklistManagePage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  // AI 초안은 저장 전까지 화면에만 있는 값이다 (guidelines 3-4 — draft는 저장하지 않음).
+  // 초안은 저장 전까지 화면에만 있는 값이다 (guidelines 3-4 — draft는 저장하지 않음).
+  // AI가 만든 것과 업무별 읽기 항목 두 가지가 같은 미리보기 UI를 쓴다.
   const [draft, setDraft] = useState(null);
+  const [draftKind, setDraftKind] = useState(null); // "ai" | "reading"
   const [drafting, setDrafting] = useState(false);
 
   // 수정 중인 항목. 모달(prompt) 대신 행을 입력칸으로 바꾼다 — 편집하려는 항목을
@@ -33,6 +37,7 @@ function ChecklistManagePage() {
   const [newTitle, setNewTitle] = useState("");
   const [newChapterId, setNewChapterId] = useState("");
   const [busy, setBusy] = useState(false);
+  const [viewingChapterId, setViewingChapterId] = useState(null);
 
   const newcomerId = assignment?.newcomer_id;
   const documentId = assignment?.document_id;
@@ -53,6 +58,7 @@ function ChecklistManagePage() {
 
   useEffect(() => {
     setDraft(null);
+    setDraftKind(null);
     setNotice("");
     loadItems();
   }, [loadItems]);
@@ -84,12 +90,40 @@ function ChecklistManagePage() {
     try {
       const { data } = await draftChecklist(documentId);
       // 초안은 전부 선택된 상태로 시작한다 — 사수가 빼는 편이 하나씩 고르는 것보다 빠르다.
-      setDraft((data || []).map((c, i) => ({ ...c, key: `${i}-${c.title}`, checked: true })));
+      setDraft(
+        (data || []).map((c, i) => ({ ...c, key: `${i}-${c.title}`, checked: true, source: "ai_draft" })),
+      );
+      setDraftKind("ai");
     } catch (err) {
       setError(err.userMessage || "초안을 만들지 못했습니다");
     } finally {
       setDrafting(false);
     }
+  }
+
+  /**
+   * 업무별로 "○○ 읽어보기" 항목을 만든다.
+   *
+   * 읽었는지를 따로 기록하는 테이블을 만들지 않고 체크리스트를 그대로 쓰는 이유:
+   * 리포트의 gap_task 신호가 원래 "완료 체크 후에도 같은 챕터를 계속 묻는가"를 보기 때문에,
+   * 읽기 항목이 체크리스트에 들어가는 순간 "읽었다는데 계속 묻는다"가 자동으로 잡힌다.
+   * 스키마도 API도 건드리지 않고 신호 하나가 더 날카로워진다.
+   */
+  function handleReadingTasks() {
+    setError("");
+    setNotice("");
+    const existing = new Set(items.map((item) => item.title));
+    const candidates = chapters
+      .map((chapter, i) => ({
+        title: readingTaskTitle(chapter.title),
+        chapter_id: chapter.chapter_id,
+        key: `read-${i}-${chapter.chapter_id}`,
+        source: "manual",
+        // 이미 있는 항목은 기본으로 빼둔다 — 두 번 눌러도 중복 저장되지 않게.
+        checked: !existing.has(readingTaskTitle(chapter.title)),
+      }));
+    setDraft(candidates);
+    setDraftKind("reading");
   }
 
   async function handleSaveDraft() {
@@ -104,10 +138,11 @@ function ChecklistManagePage() {
           chapter_id: d.chapter_id || null,
           title: d.title,
           order: nextOrder + i,
-          source: "ai_draft",
+          source: d.source || "ai_draft",
         })),
       );
       setDraft(null);
+      setDraftKind(null);
       setNotice(`${chosen.length}개를 저장했습니다.`);
       await loadItems();
     } catch (err) {
@@ -176,14 +211,24 @@ function ChecklistManagePage() {
   async function handleMove(index, direction) {
     const target = index + direction;
     if (target < 0 || target >= items.length) return;
+    const moved = items[index];
+    const swapped = items[target];
     setBusy(true);
     try {
       // 두 항목의 order를 맞바꾼다. reorder는 항목 하나의 order만 받으므로 두 번 호출한다.
-      await reorderChecklistItem(items[index].item_id, items[target].order);
-      await reorderChecklistItem(items[target].item_id, items[index].order);
+      await reorderChecklistItem(moved.item_id, swapped.order);
+      try {
+        await reorderChecklistItem(swapped.item_id, moved.order);
+      } catch (err) {
+        // 첫 호출만 성공하면 두 항목의 order가 같아져서 이후 정렬이 뒤죽박죽이 된다.
+        // 되돌려서 원래 순서를 지킨 뒤 실패로 처리한다.
+        await reorderChecklistItem(moved.item_id, moved.order).catch(() => {});
+        throw err;
+      }
       await loadItems();
     } catch (err) {
       setError(err.userMessage || "순서를 바꾸지 못했습니다");
+      await loadItems();
     } finally {
       setBusy(false);
     }
@@ -200,6 +245,14 @@ function ChecklistManagePage() {
         <span style={{ fontSize: 12, color: "var(--text-faint)", marginLeft: "auto" }}>
           {items.length}개 중 {items.filter((i) => i.status === "done").length}개 완료
         </span>
+        {/* 어떤 업무를 항목으로 만들지 정하려면 본문을 봐야 한다. 화면을 떠나지 않고 열어본다. */}
+        <Button
+          size="sm"
+          disabled={!chapters.length}
+          onClick={() => setViewingChapterId(chapters[0].chapter_id)}
+        >
+          인수인계서 보기
+        </Button>
       </NewcomerPicker>
 
       {assignment && (
@@ -208,18 +261,32 @@ function ChecklistManagePage() {
           {notice && <div className="banner banner-info">{notice}</div>}
 
           <div className="card">
-            <p className="card-title">AI 초안</p>
+            <p className="card-title">항목 만들기</p>
             <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--text-muted)" }}>
-              인수인계서에 적힌 업무를 읽고 후보를 뽑아옵니다. 승인하기 전까지는 저장되지 않습니다.
+              인수인계서를 바탕으로 후보를 뽑아옵니다. 승인하기 전까지는 저장되지 않습니다.
             </p>
-            <Button onClick={handleDraft} disabled={drafting || busy}>
-              {drafting ? "초안 만드는 중…" : "인수인계서 기반 초안 생성"}
-            </Button>
+            <div className="actions" style={{ marginTop: 0 }}>
+              <Button variant="primary" onClick={handleDraft} disabled={drafting || busy}>
+                {drafting ? "초안 만드는 중…" : "AI로 할 일 뽑기"}
+              </Button>
+              <Button onClick={handleReadingTasks} disabled={drafting || busy || !chapters.length}>
+                업무별 읽기 항목 만들기
+              </Button>
+            </div>
+            {!chapters.length && (
+              <p className="hint" style={{ marginTop: 8 }}>
+                업무 목록을 불러오지 못해 읽기 항목을 만들 수 없습니다.
+              </p>
+            )}
 
             {draft && (
               <div style={{ marginTop: 16 }}>
                 {draft.length === 0 ? (
-                  <div className="empty">후보를 만들지 못했습니다.</div>
+                  <div className="empty">
+                    {draftKind === "reading"
+                      ? "인수인계서에 등록된 업무가 없습니다."
+                      : "후보를 만들지 못했습니다."}
+                  </div>
                 ) : (
                   <>
                     <ul className="check-list">
@@ -242,7 +309,11 @@ function ChecklistManagePage() {
                             <div className="title">{candidate.title}</div>
                             <div className="meta">{chapterTitle(candidate.chapter_id)}</div>
                           </div>
-                          <span className="badge badge-ai">AI 초안</span>
+                          {candidate.source === "ai_draft" ? (
+                            <span className="badge badge-ai">AI 초안</span>
+                          ) : (
+                            <span className="badge badge-manual">읽기</span>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -354,35 +425,54 @@ function ChecklistManagePage() {
               style={{ background: "var(--surface-2)", marginTop: 14 }}
               onSubmit={handleAdd}
             >
-              <div className="row-2">
-                <Field label="직접 추가">
-                  {(props) => (
-                    <input
-                      {...props}
-                      type="text"
-                      placeholder="예: 배포 절차 문서 읽어보기"
-                      value={newTitle}
-                      onChange={(e) => setNewTitle(e.target.value)}
-                    />
-                  )}
-                </Field>
-                <Field label="연결할 업무 (선택)">
-                  {(props) => (
-                    <select
-                      {...props}
-                      value={newChapterId}
-                      onChange={(e) => setNewChapterId(e.target.value)}
+              <p className="card-title">직접 추가</p>
+
+              {/* 업무(대분류)를 먼저 고르고 할 일(소분류)을 적는 2단계.
+                  드롭다운이 아니라 버튼으로 편 이유는, 어떤 업무들이 있는지 자체가
+                  "무엇을 시킬까"의 힌트이기 때문이다. 펼쳐놔야 눈에 들어온다. */}
+              <div className="field">
+                <label>대분류 · 어떤 업무인가요?</label>
+                <div className="chip-group">
+                  <button
+                    type="button"
+                    className={!newChapterId ? "active" : undefined}
+                    onClick={() => setNewChapterId("")}
+                  >
+                    연결 안 함
+                  </button>
+                  {chapters.map((chapter) => (
+                    <button
+                      type="button"
+                      key={chapter.chapter_id}
+                      className={newChapterId === chapter.chapter_id ? "active" : undefined}
+                      onClick={() => setNewChapterId(chapter.chapter_id)}
                     >
-                      <option value="">연결 안 함</option>
-                      {chapters.map((chapter) => (
-                        <option key={chapter.chapter_id} value={chapter.chapter_id}>
-                          {chapter.title}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </Field>
+                      {chapter.title}
+                    </button>
+                  ))}
+                </div>
+                <p className="hint">
+                  {chapters.length
+                    ? "업무를 연결하면 신입이 그 본문을 바로 열어볼 수 있고, 리포트의 완료–이해 불일치 신호에도 잡힙니다."
+                    : "인수인계서에 등록된 업무가 없어 연결할 대상이 없습니다."}
+                </p>
               </div>
+
+              <Field label="소분류 · 신입이 할 일">
+                {(props) => (
+                  <input
+                    {...props}
+                    type="text"
+                    placeholder={
+                      newChapterId
+                        ? `예: ${chapterTitle(newChapterId)} 절차대로 1회 해보기`
+                        : "예: 주간 회의 참석하기"
+                    }
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                  />
+                )}
+              </Field>
               <div className="actions actions-end">
                 <Button type="submit" variant="primary" disabled={!newTitle.trim() || busy}>
                   추가
@@ -391,6 +481,15 @@ function ChecklistManagePage() {
             </form>
           </div>
         </>
+      )}
+
+      {viewingChapterId && (
+        <ChapterViewer
+          chapters={chapters}
+          chapterId={viewingChapterId}
+          answer={null}
+          onClose={() => setViewingChapterId(null)}
+        />
       )}
     </>
   );
