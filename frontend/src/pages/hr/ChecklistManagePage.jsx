@@ -114,7 +114,9 @@ function ChecklistManagePage() {
   function chapterTitle(chapterId) {
     if (!chapterId) return "연결된 업무 없음";
     const chapter = chapters.find((c) => c.chapter_id === chapterId);
-    if (!chapter) return chapterId;
+    // 재배정으로 문서가 바뀌면(guidelines 3-1) 이 항목이 가리키던 챕터가 지금
+    // 배정된 문서의 목록엔 없을 수 있다 — UUID를 그대로 보여주지 않는다.
+    if (!chapter) return "연결된 업무를 찾을 수 없음(문서가 바뀌었을 수 있음)";
     const number = outline.numbers.get(chapterId);
     return number ? `${number}. ${chapter.title}` : chapter.title;
   }

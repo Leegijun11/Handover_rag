@@ -208,7 +208,12 @@ function ReportPage() {
   }, [lockSecondsLeft]);
 
   function chapterTitleOf(chapterId) {
-    return chapters.find((c) => c.chapter_id === chapterId)?.title || chapterId;
+    // 재배정으로 문서가 바뀌면(guidelines 3-1) 히트맵이 가리키는 챕터가 지금 배정된
+    // 문서의 목록엔 없을 수 있다 — UUID를 그대로 보여주지 않는다.
+    return (
+      chapters.find((c) => c.chapter_id === chapterId)?.title ||
+      "삭제되었거나 문서가 바뀐 업무"
+    );
   }
 
   async function handleGenerate() {

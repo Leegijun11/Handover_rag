@@ -18,6 +18,7 @@ class ChatLogORM(Base):
     log_id = Column(String(36), primary_key=True, default=_uuid)
     newcomer_id = Column(String(36), index=True, nullable=False)
     question = Column(Text, nullable=False)
+    answer = Column(Text, nullable=False)
     answered = Column(Boolean, nullable=False)
     matched_chapter_id = Column(String(36), nullable=True)
     question_type = Column(String(20), nullable=False)  # fact/procedure/judgment/advanced

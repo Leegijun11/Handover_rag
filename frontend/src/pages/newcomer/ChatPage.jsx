@@ -11,9 +11,10 @@ import Button from "../../components/common/Button";
 /**
  * 신입 챗봇 대화 (guidelines 3-3, 4-3).
  *
- * 대화 내용은 이 화면을 벗어나면 사라진다. ChatLog가 저장하는 건 question/answered/
- * matched_chapter_id뿐이고 답변 본문을 담는 필드가 없어서, GET /chat/logs로는 이전
- * 대화를 복원할 수 없다. ChatLog.answer 추가 여부를 조장님께 여쭤둔 상태다.
+ * ChatLog에 answer(신설, guidelines 2-4)가 저장되므로 GET /chat/logs로 이전 대화를
+ * 복원한다 — 아래 두 번째 useEffect 참고. 단, 재배정으로 sourceChapterId가 옛 문서의
+ * 챕터를 가리키게 되면(guidelines 3-1) 그 메시지의 출처 칩만 사라진다 — 메시지 자체는
+ * 그대로 복원된다.
  *
  * 답변 실패(answered=false) 시 문구에 "문서를 보강하겠다"는 취지를 넣지 않는다 —
  * 그 얘기는 사수 리포트에서만 다룬다 (guidelines 1-7).
@@ -71,8 +72,22 @@ function ChatPage() {
     getChatLogs(newcomerId)
       .then(({ data }) => {
         if (cancelled) return;
-        const asked = (data || []).map((log) => log.matched_chapter_id).filter(Boolean);
+        const logs = data || [];
+        const asked = logs.map((log) => log.matched_chapter_id).filter(Boolean);
         setAskedChapterIds(new Set(asked));
+        // ChatLog에 answer가 저장되므로(guidelines 2-4, 신설) 화면을 벗어났다 돌아와도
+        // 대화를 복원할 수 있다. /chat/logs는 최신순으로 오므로 대화 순서로 뒤집고,
+        // 로그 한 건을 질문/답변 말풍선 두 개로 편다.
+        const restored = [...logs].reverse().flatMap((log) => [
+          { role: "me", text: log.question },
+          {
+            role: "bot",
+            text: log.answer,
+            answered: log.answered,
+            sourceChapterId: log.matched_chapter_id,
+          },
+        ]);
+        setMessages(restored);
       })
       .catch(() => !cancelled && setAskedChapterIds(new Set()));
     return () => {
