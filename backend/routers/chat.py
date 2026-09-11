@@ -129,6 +129,7 @@ def _make_save_node(db: Session):
             ChatLogORM(
                 log_id=str(uuid.uuid4()),
                 newcomer_id=state["newcomer_id"],
+                document_id=state["document_id"],
                 question=state["question"],
                 answer=state["answer"],
                 answered=state["answered"],
@@ -218,6 +219,7 @@ def get_logs(
         ChatLog(
             log_id=row.log_id,
             newcomer_id=row.newcomer_id,
+            document_id=row.document_id,
             question=row.question,
             answer=row.answer,
             answered=row.answered,

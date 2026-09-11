@@ -72,10 +72,14 @@ function ChatPage() {
     getChatLogs(newcomerId)
       .then(({ data }) => {
         if (cancelled) return;
-        const logs = data || [];
+        // /chat/logs는 이 신입의 전체 이력을 준다(HR 원본 로그 조회 등 다른 용도도
+        // 있어서 API 자체는 안 좁힘, guidelines 3-3). 재배정 전 옛 문서 대화까지
+        // 여기서 같이 복원되면 안 되므로, 지금 배정된 document_id로 화면단에서 거른다
+        // (ChatLog.document_id, guidelines 2-4).
+        const logs = (data || []).filter((log) => log.document_id === documentId);
         const asked = logs.map((log) => log.matched_chapter_id).filter(Boolean);
         setAskedChapterIds(new Set(asked));
-        // ChatLog에 answer가 저장되므로(guidelines 2-4, 신설) 화면을 벗어났다 돌아와도
+        // ChatLog에 answer가 저장되므로(guidelines 2-4) 화면을 벗어났다 돌아와도
         // 대화를 복원할 수 있다. /chat/logs는 최신순으로 오므로 대화 순서로 뒤집고,
         // 로그 한 건을 질문/답변 말풍선 두 개로 편다.
         const restored = [...logs].reverse().flatMap((log) => [
@@ -93,7 +97,7 @@ function ChatPage() {
     return () => {
       cancelled = true;
     };
-  }, [newcomerId]);
+  }, [newcomerId, documentId]);
 
   // 새 말풍선이 붙으면 항상 맨 아래가 보이게 한다.
   useEffect(() => {

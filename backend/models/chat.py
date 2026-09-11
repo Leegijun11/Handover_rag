@@ -17,6 +17,7 @@ class ChatLogORM(Base):
 
     log_id = Column(String(36), primary_key=True, default=_uuid)
     newcomer_id = Column(String(36), index=True, nullable=False)
+    document_id = Column(String(36), index=True, nullable=False)
     question = Column(Text, nullable=False)
     answer = Column(Text, nullable=False)
     answered = Column(Boolean, nullable=False)
