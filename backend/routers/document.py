@@ -229,7 +229,10 @@ async def upload_document(
         # 목록 화면(GET /document)에 보여줄 대표 라벨. 문서에 제목 필드가 없어서(2-3)
         # 첫 파일명을 쓰고, 여러 개면 개수를 덧붙인다 — 프론트가 브라우저에만 임시로
         # 들고 있던 로직을 업로드 시점에 한 번만 계산해 DB에 고정하는 것으로 옮김.
-        first_name = files[0].filename or "제목 없는 인수인계서"
+        # 확장자(.md/.txt)는 목록에서 굳이 안 보여도 되는 정보라 잘라낸다 —
+        # fallback_title과 같은 rsplit 규칙을 써서 두 값이 서로 어긋나지 않게 한다.
+        first_name_raw = files[0].filename or "제목 없는 인수인계서"
+        first_name = first_name_raw.rsplit(".", 1)[0] if "." in first_name_raw else first_name_raw
         label = first_name if len(files) == 1 else f"{first_name} 외 {len(files) - 1}개"
     else:
         parsed_chapters = _parse_chapters_json(chapters)

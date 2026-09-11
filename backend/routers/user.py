@@ -17,6 +17,7 @@ from core.auth import (
     create_access_token,
     get_current_user,
     hash_password,
+    require_self,
     verify_password,
 )
 from core.database import get_db
@@ -135,3 +136,27 @@ def get_user(
     if user is None:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
     return user
+
+
+@router.delete("/user/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(
+    user_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """회원 탈퇴 (guidelines 3-1 신설). 본인 계정만 삭제할 수 있다 (guidelines 3-9).
+
+    1차 범위: users 행만 지운다. 사수가 올린 문서/배정이나 신입의 채팅·체크리스트
+    기록은 남는다 — 재배정 시 chapter_id가 고아로 남는 것(guidelines 3-1)과 같은
+    성격의 accepted 1차 한계로 취급한다. 연쇄 삭제는 각 데이터가 다른 팀원 소유
+    테이블에 걸쳐 있어 범위가 커지므로, 필요해지면 그때 따로 설계한다.
+    """
+    require_self(current_user, user_id)
+
+    user = db.query(UserORM).filter(UserORM.user_id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+
+    db.delete(user)
+    db.commit()
+    return None

@@ -12,3 +12,7 @@ export function login(payload) {
 export function getUser(userId) {
   return apiClient.get(`/user/${userId}`);
 }
+
+export function deleteUser(userId) {
+  return apiClient.delete(`/user/${userId}`);
+}
