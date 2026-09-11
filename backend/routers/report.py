@@ -5,15 +5,6 @@
   2. 4개 신호 계산: growth_curve / chapter_heatmap / gap_task / silence_risk
   3. 신호별 LLM 요약(summary) 생성 — 질문 원문 그대로 노출 금지, 패턴 단위로만 서술
   4. AdaptationReport로 저장 (generated_at = 실제 생성 시각) 후 반환
-
-TODO(연동 필요 — 팀원 A, 팀원 B):
-- ChecklistItem 조회(_get_checklist_items, 팀원 A)와 Assignment.assigned_at 조회
-  (_get_assignment_assigned_at, 팀원 B)가 스텁입니다. 각 feature 브랜치가 병합되면
-  함수 안의 주석 처리된 실제 쿼리로 교체하세요.
-- 지금은 ChecklistItem이 항상 빈 리스트라 gap_task 신호가 항상 빈 결과이고,
-  growth_curve/chapter_heatmap/silence_risk는 ChatLog(내가 직접 소유)만으로 계산됩니다
-  — 이건 정상 동작입니다(미연동 상태의 안전한 기본값), 4개 신호 다 "빈 값 없이"
-  채워지는지는 6-3 통합 테스트에서 팀원 A 병합 후 재검증 필요.
 """
 
 import uuid
@@ -30,7 +21,9 @@ from core.auth import CurrentUser, get_current_user, require_role
 from core.database import get_db
 from core.llm import REPORT_MODEL, chat_complete
 from core.rate_limit import IP_RATE_LIMIT, USER_RATE_LIMIT, ip_limiter, user_limiter
+from models.assignment import get_assignment_by_newcomer
 from models.chat import ChatLogORM
+from models.checklist import ChecklistItemORM
 from models.report import AdaptationReportORM, ReportSectionORM
 from schemas.report import AdaptationReport, ReportSection
 
@@ -49,32 +42,18 @@ class GenerateReportRequest(BaseModel):
 
 
 def _get_assignment_assigned_at(db: Session, newcomer_id: str) -> datetime | None:
-    """TODO(연동 필요 — 팀원 B): models/assignment.py 병합 후 아래 실제 쿼리로 교체.
-
-        from models.assignment import AssignmentORM
-        row = db.query(AssignmentORM).filter_by(newcomer_id=newcomer_id).first()
-        return row.assigned_at if row else None
-
-    최초 리포트의 period_start 기본값("Assignment 생성일 ~ 지금", guidelines 3-6)에 씀.
-    지금은 팀원 B 브랜치가 main에 없어 조회 불가 — None 반환(호출부가 폴백 처리).
-    """
-    return None
+    """최초 리포트의 period_start 기본값("Assignment 생성일 ~ 지금", guidelines 3-6)에 씀."""
+    row = get_assignment_by_newcomer(db, newcomer_id)
+    return row.assigned_at if row else None
 
 
 def _get_checklist_items(db: Session, newcomer_id: str) -> list[dict]:
-    """TODO(연동 필요 — 팀원 A): models/checklist.py 병합 후 아래 실제 쿼리로 교체.
-
-        from models.checklist import ChecklistItemORM
-        rows = db.query(ChecklistItemORM).filter_by(newcomer_id=newcomer_id).all()
-        return [
-            {"title": r.title, "chapter_id": r.chapter_id, "completed_at": r.completed_at}
-            for r in rows
-        ]
-
-    gap_task 신호(완료 후에도 관련 질문이 이어진 항목) 계산에 씀.
-    지금은 팀원 A 브랜치가 main에 없어 조회 불가 — 빈 리스트 반환.
-    """
-    return []
+    """gap_task 신호(완료 후에도 관련 질문이 이어진 항목) 계산에 씀."""
+    rows = db.query(ChecklistItemORM).filter_by(newcomer_id=newcomer_id).all()
+    return [
+        {"title": r.title, "chapter_id": r.chapter_id, "completed_at": r.completed_at}
+        for r in rows
+    ]
 
 
 class ReportState(TypedDict):

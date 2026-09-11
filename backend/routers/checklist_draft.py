@@ -4,11 +4,6 @@
   1. document_id에 해당하는 DocumentChapter를 MySQL에서 조회 (ChromaDB 접근 금지 — guidelines 1-5)
   2. 챕터를 순회하며 LLM으로 태스크 후보 {title, chapter_id} 생성
   3. 저장하지 않고 리스트만 반환 (미리보기 — 실제 저장은 팀원 A의 POST /checklist)
-
-TODO(연동 필요 — 팀원 A): DocumentChapter 조회(_get_chapters)가 스텁입니다. 팀원 A의
-feature 브랜치가 main에 병합되어 models/document.py가 생기면, 아래 함수 안의 주석
-처리된 실제 쿼리로 교체하세요. 지금은 항상 빈 리스트를 반환해서 이 API가 빈 배열만
-내놓습니다 — 이게 정상 동작입니다(미연동 상태의 안전한 기본값).
 """
 
 import json
@@ -23,6 +18,7 @@ from core.auth import CurrentUser, get_current_user, require_role
 from core.database import get_db
 from core.llm import DRAFT_MODEL, chat_complete
 from core.rate_limit import IP_RATE_LIMIT, USER_RATE_LIMIT, ip_limiter, user_limiter
+from models.document import DocumentChapterORM
 
 router = APIRouter(tags=["checklist_draft"])
 
@@ -32,15 +28,8 @@ class DraftRequest(BaseModel):
 
 
 def _get_chapters(db: Session, document_id: str) -> list[dict]:
-    """TODO(연동 필요 — 팀원 A): models/document.py 병합 후 아래 실제 쿼리로 교체.
-
-        from models.document import DocumentChapterORM
-        rows = db.query(DocumentChapterORM).filter_by(document_id=document_id).all()
-        return [{"chapter_id": r.chapter_id, "title": r.title, "content": r.content} for r in rows]
-
-    지금은 팀원 A 브랜치가 main에 없어 조회 불가 — 빈 리스트 반환.
-    """
-    return []
+    rows = db.query(DocumentChapterORM).filter_by(document_id=document_id).all()
+    return [{"chapter_id": r.chapter_id, "title": r.title, "content": r.content} for r in rows]
 
 
 class DraftState(TypedDict):
