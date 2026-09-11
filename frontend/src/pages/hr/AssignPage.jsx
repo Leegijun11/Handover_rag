@@ -155,7 +155,7 @@ function AssignPage() {
                 >
                   {documents.map((doc) => (
                     <option key={doc.documentId} value={doc.documentId}>
-                      {doc.label} (업무 {doc.chapterCount}개)
+                      {doc.label}
                     </option>
                   ))}
                 </select>

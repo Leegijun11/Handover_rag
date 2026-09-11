@@ -28,10 +28,13 @@ export function listUploadedDocuments(mentorId) {
   }
 }
 
-export function rememberUploadedDocument(mentorId, { documentId, chapterTitles }) {
+export function rememberUploadedDocument(mentorId, { documentId, fileName, chapterTitles }) {
   if (!mentorId || !documentId) return;
-  // 문서에 이름 필드가 없어서(2번 문서 DocumentChapter만 존재) 첫 업무 제목을 라벨로 쓴다.
-  const label = chapterTitles?.[0] || "제목 없는 인수인계서";
+  // 문서에 이름 필드가 없어서(2번 문서 DocumentChapter만 존재) 원본 파일명을 라벨로
+  // 쓴다 — 안 그러면 "담당업무", "담당 업무 개요"처럼 1번 챕터 제목만 겹쳐 보여서
+  // 여러 문서를 구분하기 어려웠다(실제로 지적받음). 직접 입력 경로는 파일이 없으니
+  // 그때만 첫 업무 제목으로 폴백한다.
+  const label = fileName || chapterTitles?.[0] || "제목 없는 인수인계서";
   const entry = {
     documentId,
     label,

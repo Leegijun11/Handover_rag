@@ -47,6 +47,18 @@ body {
 }
 .brand { font-weight: 800; font-size: 14px; letter-spacing: .6px; }
 .brand span { color: var(--accent); }
+/* AppShell 로고를 <span>에서 <button>으로 바꿔서 홈 이동이 되게 함 — 버튼 기본
+   테두리/배경/커서를 지워서 기존 span이랑 똑같이 보이게 한다. */
+.brand-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  letter-spacing: .6px;
+  cursor: pointer;
+}
 .app-header .spacer { margin-left: auto; }
 .who { font-size: 13px; color: var(--text-muted); }
 .who b { color: var(--text); font-weight: 600; }

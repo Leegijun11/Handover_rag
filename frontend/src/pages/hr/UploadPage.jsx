@@ -94,6 +94,7 @@ function UploadPage() {
       // 브라우저에 남긴다 (api/documentHistory.js 주석 참고).
       rememberUploadedDocument(mentor.user_id, {
         documentId: data.document_id,
+        fileName: tab === "file" ? file?.name : null,
         chapterTitles: (data.chapters || []).map((c) => c.title),
       });
       // 성공한 입력은 비워서, 같은 문서를 두 번 올리는 실수를 줄인다.

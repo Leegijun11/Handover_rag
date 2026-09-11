@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { clearSession, getCurrentUser } from "../../api/session";
+import { clearSession, getCurrentUser, homePathFor } from "../../api/session";
 import Button from "./Button";
 import { useNewcomerScope } from "./NewcomerScope";
 
@@ -39,9 +39,13 @@ function AppShell({ children }) {
   return (
     <>
       <header className="app-header">
-        <span className="brand">
+        <button
+          type="button"
+          className="brand brand-link"
+          onClick={() => navigate(homePathFor(user))}
+        >
           HAND<span>OVER</span>
-        </span>
+        </button>
         <div className="spacer" />
         <span className="who">
           <b>{user?.name}</b> 님
