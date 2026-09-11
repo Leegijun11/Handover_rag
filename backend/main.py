@@ -29,10 +29,12 @@ from routers.user import router as user_router  # noqa: E402
 # TODO(각 담당자): backend/models/*.py를 만들면 여기에 import 줄을 추가하세요
 # (예: from models.user import UserORM) — Base.metadata.create_all이 이 import들로
 # 등록된 테이블만 생성합니다 (guidelines 5-3-1, A-1).
+from models.assignment import AssignmentORM  # noqa: E402, F401
 from models.chat import ChatLogORM  # noqa: E402, F401
 from models.report import AdaptationReportORM, ReportSectionORM  # noqa: E402, F401
 from models.document import DocumentChapterORM, DocumentMentorMapORM  # noqa: E402, F401
 from models.checklist import ChecklistItemORM  # noqa: E402, F401
+from models.user import UserORM  # noqa: E402, F401
 
 app = FastAPI(title="신입 업무보조 챗봇 API")
 
