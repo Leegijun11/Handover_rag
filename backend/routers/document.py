@@ -22,11 +22,21 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB (guidelines 5-9, 4-2)
 
 # ── 임베딩 헬퍼 ──
 EMBEDDING_MODEL = "text-embedding-3-small"  # 조장 core/llm.py의 EMBEDDING_MODEL과 동일 (4-2)
-_openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+_openai_client: OpenAI | None = None
+
+
+def _get_openai_client() -> OpenAI:
+    # 모듈 import 시점에 바로 만들면 OPENAI_API_KEY가 없을 때 서버 부팅 자체가 실패함
+    # (실제로 재현해서 발견 — .env에 키가 비어있으면 main.py의 라우터 import 단계에서
+    # OpenAIError가 나서 서버가 아예 안 켜졌음). 첫 실제 사용 시점까지 생성을 미룸.
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    return _openai_client
 
 
 def _embed_texts(texts: list[str]) -> list[list[float]]:
-    response = _openai_client.embeddings.create(model=EMBEDDING_MODEL, input=texts)
+    response = _get_openai_client().embeddings.create(model=EMBEDDING_MODEL, input=texts)
     return [item.embedding for item in response.data]
 
 
