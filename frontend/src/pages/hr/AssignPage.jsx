@@ -4,9 +4,8 @@ import {
   getAssignmentsByMentor,
 } from "../../services/router/assignment";
 import { getUser } from "../../services/router/user";
-import { getChapters } from "../../services/router/document";
+import { getChapters, listMyDocuments } from "../../services/router/document";
 import { getCurrentUser } from "../../api/session";
-import { listUploadedDocuments } from "../../api/documentHistory";
 import Button from "../../components/common/Button";
 import ChapterViewer from "../../components/common/ChapterViewer";
 import Field from "../../components/common/Field";
@@ -19,14 +18,18 @@ function formatDate(value) {
 
 function AssignPage() {
   const mentor = getCurrentUser();
-  const documents = listUploadedDocuments(mentor?.user_id);
+
+  // GET /document?mentor_id= (guidelines 3-2 신설) — 이전엔 이 브라우저의 localStorage만
+  // 봐서 다른 브라우저/기기에서 올린 문서가 안 보였다. 이제 DB에서 직접 받아온다.
+  const [documents, setDocuments] = useState([]);
+  const [documentsLoading, setDocumentsLoading] = useState(true);
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState("");
 
   const [newcomerId, setNewcomerId] = useState("");
-  const [documentId, setDocumentId] = useState(documents[0]?.documentId || "");
+  const [documentId, setDocumentId] = useState("");
   const [formError, setFormError] = useState("");
   const [notice, setNotice] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -34,6 +37,23 @@ function AssignPage() {
   // 눌렀을 때만 챕터를 받아와 본문을 보여준다.
   const [viewing, setViewing] = useState(null); // { documentId, chapters }
   const [viewingId, setViewingId] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    listMyDocuments(mentor.user_id)
+      .then(({ data }) => {
+        if (cancelled) return;
+        setDocuments(data || []);
+        // 처음 불러왔을 때만 첫 문서를 기본 선택해둔다 — 이후 사용자가 고른 값은
+        // 목록이 새로고침돼도 건드리지 않는다.
+        setDocumentId((prev) => prev || data?.[0]?.document_id || "");
+      })
+      .catch(() => !cancelled && setDocuments([]))
+      .finally(() => !cancelled && setDocumentsLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [mentor.user_id]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -141,9 +161,11 @@ function AssignPage() {
           <Field
             label="인수인계서"
             hint={
-              documents.length
-                ? "이 브라우저에서 올린 문서만 목록에 나옵니다"
-                : "먼저 인수인계서를 업로드하거나 document_id를 직접 입력하세요"
+              documentsLoading
+                ? "불러오는 중…"
+                : documents.length
+                  ? "내가 올린 문서 목록입니다"
+                  : "먼저 인수인계서를 업로드하거나 document_id를 직접 입력하세요"
             }
           >
             {(props) =>
@@ -154,7 +176,7 @@ function AssignPage() {
                   onChange={(e) => setDocumentId(e.target.value)}
                 >
                   {documents.map((doc) => (
-                    <option key={doc.documentId} value={doc.documentId}>
+                    <option key={doc.document_id} value={doc.document_id}>
                       {doc.label}
                     </option>
                   ))}
@@ -206,7 +228,7 @@ function AssignPage() {
                     <div className="hint">{row.newcomerEmail || row.newcomer_id}</div>
                   </td>
                   <td>
-                    {documents.find((d) => d.documentId === row.document_id)?.label || (
+                    {documents.find((d) => d.document_id === row.document_id)?.label || (
                       <span className="hint">{row.document_id}</span>
                     )}
                   </td>

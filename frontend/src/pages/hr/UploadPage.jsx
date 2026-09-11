@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
-import { uploadDocumentChapters, uploadDocumentFile } from "../../services/router/document";
+import { uploadDocumentChapters, uploadDocumentFiles } from "../../services/router/document";
 import { getCurrentUser } from "../../api/session";
-import { rememberUploadedDocument } from "../../api/documentHistory";
 import { HANDOVER_TEMPLATE } from "../../api/handoverTemplate";
 import Button from "../../components/common/Button";
 import ChapterViewer from "../../components/common/ChapterViewer";
@@ -31,7 +30,7 @@ function UploadPage() {
   const fileInputRef = useRef(null);
 
   const [tab, setTab] = useState("file"); // file | manual
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]); // 인수인계서가 파일 여러 개로 나뉜 경우 지원 (guidelines 3-2)
   const [chapters, setChapters] = useState([newChapter(), newChapter()]);
   const [usingTemplate, setUsingTemplate] = useState(false);
   const [error, setError] = useState("");
@@ -57,15 +56,24 @@ function UploadPage() {
     setUsingTemplate(false);
   }
 
-  function pickFile(picked) {
+  function pickFiles(pickedList) {
     setError("");
     setResult(null);
-    if (!picked) return setFile(null);
-    if (picked.size > MAX_FILE_BYTES) {
-      setFile(null);
-      return setError("파일 크기는 10MB를 넘을 수 없습니다");
+    const picked = Array.from(pickedList || []);
+    if (!picked.length) return;
+    // 하나라도 10MB를 넘으면 전체를 거부한다 — 어느 파일만 골라 담았는지 헷갈리는 것보다
+    // 낫다 (guidelines 5-9, 서버도 파일 하나 기준으로 같은 상한을 검사).
+    const oversized = picked.find((f) => f.size > MAX_FILE_BYTES);
+    if (oversized) {
+      return setError(`'${oversized.name}' 파일 크기는 10MB를 넘을 수 없습니다`);
     }
-    setFile(picked);
+    // 여러 번 끌어다 놓거나 다시 선택하면 기존 목록에 더한다 — 한 번에 다 못 골라도
+    // 나눠서 쌓을 수 있게.
+    setFiles((prev) => [...prev, ...picked]);
+  }
+
+  function removeFile(index) {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
   function updateChapter(key, patch) {
@@ -81,7 +89,7 @@ function UploadPage() {
     try {
       const { data } =
         tab === "file"
-          ? await uploadDocumentFile(mentor.user_id, file)
+          ? await uploadDocumentFiles(mentor.user_id, files)
           : await uploadDocumentChapters(
               mentor.user_id,
               filledChapters.map(({ title, content }) => ({
@@ -90,15 +98,11 @@ function UploadPage() {
               })),
             );
       setResult({ ...data, mode: tab });
-      // 문서 목록 API가 없어서, 배정 화면이 쓸 수 있도록 여기서 받은 document_id를
-      // 브라우저에 남긴다 (api/documentHistory.js 주석 참고).
-      rememberUploadedDocument(mentor.user_id, {
-        documentId: data.document_id,
-        fileName: tab === "file" ? file?.name : null,
-        chapterTitles: (data.chapters || []).map((c) => c.title),
-      });
+      // 배정 화면 드롭다운용 대표 라벨은 이제 서버가 업로드 시점에 계산해서 저장한다
+      // (routers/document.py, GET /document?mentor_id=) — 브라우저에 따로 안 남겨도
+      // 어느 기기에서 로그인해도 배정 화면에서 바로 보인다.
       // 성공한 입력은 비워서, 같은 문서를 두 번 올리는 실수를 줄인다.
-      setFile(null);
+      setFiles([]);
       if (fileInputRef.current) fileInputRef.current.value = "";
       clearForm();
     } catch (err) {
@@ -108,7 +112,7 @@ function UploadPage() {
     }
   }
 
-  const canSubmit = tab === "file" ? Boolean(file) : filledChapters.length > 0;
+  const canSubmit = tab === "file" ? files.length > 0 : filledChapters.length > 0;
 
   return (
     <>
@@ -195,23 +199,43 @@ function UploadPage() {
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
-                pickFile(e.dataTransfer.files?.[0]);
+                pickFiles(e.dataTransfer.files);
               }}
             >
               <input
                 ref={fileInputRef}
                 type="file"
                 accept={ACCEPTED}
+                multiple
                 hidden
-                onChange={(e) => pickFile(e.target.files?.[0])}
+                onChange={(e) => pickFiles(e.target.files)}
               />
-              <p>{file ? file.name : "파일을 끌어다 놓거나 클릭해서 선택하세요"}</p>
+              <p>
+                {files.length
+                  ? "파일을 더 끌어다 놓거나 클릭해서 추가하세요"
+                  : "파일을 끌어다 놓거나 클릭해서 선택하세요"}
+              </p>
               <span className="hint">
-                {file
-                  ? `${(file.size / 1024).toFixed(1)} KB · 다시 선택하려면 클릭하세요`
-                  : ".txt, .md · 최대 10MB · # 제목이나 1. · 제1장 번호를 업무 단위로 인식합니다"}
+                .txt, .md · 파일당 최대 10MB · 여러 개를 한 번에 올릴 수 있습니다 · # 제목이나
+                1. · 제1장 번호를 업무 단위로 인식합니다
               </span>
             </label>
+
+            {/* 목록은 dropzone(label) 밖에 둔다 — 안에 두면 "제거" 버튼을 눌러도
+                label의 네이티브 동작 때문에 파일 선택창이 같이 열려버린다. */}
+            {files.length > 0 && (
+              <ul className="file-picked-list">
+                {files.map((f, index) => (
+                  <li key={`${f.name}-${index}`}>
+                    <span className="name">{f.name}</span>
+                    <span className="hint">{(f.size / 1024).toFixed(1)} KB</span>
+                    <Button size="sm" variant="danger" onClick={() => removeFile(index)}>
+                      제거
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </>
         ) : (
           <div className="card">

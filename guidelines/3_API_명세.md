@@ -29,15 +29,18 @@
 
 | Method | Endpoint | 요청 | 응답 |
 |---|---|---|---|
-| POST | `/document/upload` | `{mentor_id: str, file: <파일>}` **또는** `{mentor_id: str, chapters: list[{title: str, content: str}]}` | `{document_id: str, chapters: list[DocumentChapter]}` |
+| POST | `/document/upload` | `{mentor_id: str, files: list[<파일>]}` **또는** `{mentor_id: str, chapters: list[{title: str, content: str}]}` | `{document_id: str, chapters: list[DocumentChapter]}` |
 | GET | `/document/{document_id}/chapters` | - | `list[DocumentChapter]` |
+| GET | `/document?mentor_id=` | - | `list[{document_id: str, label: str, uploaded_at: datetime}]` |
 
 **설명**
 - `/document/upload`: 사수가 인수인계서를 등록. 입력 방식은 두 가지
-  - **파일 업로드** (`file`): 서버가 목차(장-절)를 자동 파싱해서 `DocumentChapter` 생성
+  - **파일 업로드** (`files`, 신설 — 복수 지원): 서버가 파일마다 목차(장-절)를 자동 파싱해서 `DocumentChapter` 생성. **파일을 여러 개 보낼 수 있음** — 인수인계서가 여러 파일로 나뉘어 있는 경우(부서별 별도 파일 등)를 지원하기 위함. 파일을 받은 순서대로 각각 독립적으로 파싱한 뒤 챕터를 이어붙여 **하나의 `document_id`**로 합침 — chapter_id는 파일과 무관하게 매번 새로 발급되므로 파일 간 목차 번호가 겹쳐도 문제없음
   - **직접 입력** (`chapters`): 사수가 화면에서 챕터를 하나씩 작성(제목+본문)해서 이미 확정된 구조로 보냄 — 서버는 자동 파싱 없이 받은 그대로 `DocumentChapter`로 저장 (프론트 "챕터 추가" 폼 UI, 4-2/4-3 브리프 참고)
-  - 두 경로 모두 챕터 저장 후 각 챕터 내용을 청킹해서 `DocumentChunk` 생성 + 임베딩 후 ChromaDB에 저장까지 한 번에 처리. 청크 분할 기준(문단/글자 수 등)은 입력 방식과 무관하게 팀원 A 재량. `document_id`는 이 호출에서 새로 발급됨
+  - 두 경로 모두 챕터 저장 후 각 챕터 내용을 청킹해서 `DocumentChunk` 생성 + 임베딩 후 ChromaDB에 저장까지 한 번에 처리. 청크 분할 기준(문단/글자 수 등)은 입력 방식과 무관하게 팀원 A 재량. `document_id`는 이 호출에서 새로 발급됨. 파일 크기 상한(10MB, 5-9)은 파일 하나 기준으로 각각 적용
+  - 업로드 시점에 대표 `label`(목록 화면용, 아래 참고)을 함께 계산해서 내부에 저장 — file 모드는 첫 파일명(여러 개면 "A 외 N개"), chapters 모드는 첫 챕터 제목
 - `/document/{id}/chapters`: HR 화면에서 목차 트리를 보여줄 때, 또는 체크리스트 작성 시 챕터 선택 목록을 채울 때 사용
+- `/document?mentor_id=` (신설): 이 사수가 올린 문서 목록을 최신순으로 반환 — 배정 화면의 문서 선택 드롭다운용. 토큰의 `user_id`가 그 `mentor_id`와 같아야 함(3-9). `label`엔 `Document`에 제목 필드가 없어서(2-3) 업로드 시점에 계산해둔 대표 이름이 담김. **이전엔 이 목록을 프론트가 브라우저 localStorage로만 들고 있어서 다른 브라우저/기기에서는 안 보였음 — 이 API로 대체**
 
 ---
 

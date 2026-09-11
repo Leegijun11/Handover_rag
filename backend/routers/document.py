@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from core.auth import CurrentUser, get_current_user, require_role, require_self
 from core.chroma_client import get_collection
 from core.database import get_db
-from models.document import DocumentChapterORM, DocumentMentorMapORM
+from models.document import DocumentChapterORM, DocumentMentorMapORM, list_documents_for_mentor
 from schemas.document import DocumentChapter
 
 router = APIRouter(tags=["document"])
@@ -66,15 +66,19 @@ _MD_HEADER_RE = re.compile(r"^(#{1,3})\s+(.+)$", re.MULTILINE)
 _NUMBERED_RE = re.compile(r"^((?:\d+[-.])+\d*\.?|제\s*\d+\s*장)\s*(.+)$", re.MULTILINE)
 
 
-def _parse_chapters_from_text(text: str) -> list[dict]:
+def _parse_chapters_from_text(text: str, fallback_title: str = "전체 내용") -> list[dict]:
     """파일 본문에서 챕터 구조를 자동 인식. 실패하면 문서 전체를 챕터 1개로 폴백.
 
     인식 순서: 마크다운 헤더(#, ##) -> 숫자/장 넘버링 -> 둘 다 없으면 폴백.
     반환값 각 원소는 {"title": str, "content": str, "fallback": bool}.
+
+    fallback_title: 목차를 못 찾았을 때 쓸 제목. 파일을 여러 개 올릴 때(아래
+    upload_document) 전부 "전체 내용"이면 어느 파일이 폴백됐는지 구분이 안 되므로,
+    호출부가 파일명을 넘겨서 구분되게 한다.
     """
     text = text.strip()
     if not text:
-        raise HTTPException(status_code=400, detail="파일 내용이 비어 있습니다")
+        raise HTTPException(status_code=400, detail=f"'{fallback_title}' 파일 내용이 비어 있습니다")
 
     for pattern in (_MD_HEADER_RE, _NUMBERED_RE):
         matches = list(pattern.finditer(text))
@@ -90,7 +94,7 @@ def _parse_chapters_from_text(text: str) -> list[dict]:
             if chapters:
                 return chapters
 
-    return [{"title": "전체 내용", "content": text, "fallback": True}]
+    return [{"title": fallback_title, "content": text, "fallback": True}]
 
 
 class ChapterInput(BaseModel):
@@ -118,6 +122,7 @@ def _save_and_index_chapters(
     document_id: str,
     mentor_id: str,
     chapters: list[dict],
+    label: str,
 ) -> list[DocumentChapterORM]:
     """챕터 저장 + mentor 매핑 기록 + 청킹->임베딩->ChromaDB 저장 (두 입력방식 공용)."""
     chapter_rows = []
@@ -132,7 +137,7 @@ def _save_and_index_chapters(
         db.add(row)
         chapter_rows.append(row)
 
-    db.add(DocumentMentorMapORM(document_id=document_id, mentor_id=mentor_id))
+    db.add(DocumentMentorMapORM(document_id=document_id, mentor_id=mentor_id, label=label))
     db.commit()
 
     collection = get_collection(document_id)
@@ -183,36 +188,78 @@ def _get_assignment(db: Session, newcomer_id: str):
 @router.post("/document/upload", status_code=201)
 async def upload_document(
     mentor_id: str = Form(...),
-    file: UploadFile | None = File(None),
+    files: list[UploadFile] | None = File(None),
     chapters: str | None = Form(None),  # JSON 문자열: [{"title": "...", "content": "..."}]
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """인수인계서 등록 (guidelines 3-2) — file 또는 chapters 중 정확히 하나만 받음."""
+    """인수인계서 등록 (guidelines 3-2) — files 또는 chapters 중 정확히 하나만 받음.
+
+    files는 여러 개를 보낼 수 있다 — 인수인계서가 파일 여러 개로 나뉘어 있는 경우를
+    지원하기 위함(신설). 각 파일을 순서대로 독립적으로 자동 파싱해서, 그 결과 챕터를
+    받은 순서 그대로 이어붙인다 — 파일 간 챕터 번호가 겹쳐도 chapter_id는 파일과
+    무관하게 매번 새로 발급되므로 문제없다.
+    """
     require_role(current_user, "mentor")
     require_self(current_user, mentor_id)
 
-    if file is None and chapters is None:
-        raise HTTPException(status_code=400, detail="file 또는 chapters 중 하나는 필수입니다")
-    if file is not None and chapters is not None:
-        raise HTTPException(status_code=400, detail="file과 chapters를 동시에 보낼 수 없습니다")
+    has_files = bool(files)
+    if not has_files and chapters is None:
+        raise HTTPException(status_code=400, detail="files 또는 chapters 중 하나는 필수입니다")
+    if has_files and chapters is not None:
+        raise HTTPException(status_code=400, detail="files와 chapters를 동시에 보낼 수 없습니다")
 
-    if file is not None:
-        raw = await file.read()
-        if len(raw) > MAX_FILE_SIZE:
-            raise HTTPException(status_code=400, detail="파일 크기는 10MB를 초과할 수 없습니다")
-        try:
-            text = raw.decode("utf-8")
-        except UnicodeDecodeError:
-            raise HTTPException(status_code=400, detail="텍스트로 읽을 수 없는 파일입니다 (.txt, .md만 지원)")
-        parsed_chapters = _parse_chapters_from_text(text)
+    if has_files:
+        parsed_chapters: list[dict] = []
+        for f in files:
+            raw = await f.read()
+            if len(raw) > MAX_FILE_SIZE:
+                raise HTTPException(
+                    status_code=400, detail=f"'{f.filename}' 파일 크기는 10MB를 초과할 수 없습니다"
+                )
+            try:
+                text = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"'{f.filename}'을 텍스트로 읽을 수 없습니다 (.txt, .md만 지원)",
+                )
+            fallback_title = f.filename.rsplit(".", 1)[0] if f.filename else "전체 내용"
+            parsed_chapters.extend(_parse_chapters_from_text(text, fallback_title=fallback_title))
+        # 목록 화면(GET /document)에 보여줄 대표 라벨. 문서에 제목 필드가 없어서(2-3)
+        # 첫 파일명을 쓰고, 여러 개면 개수를 덧붙인다 — 프론트가 브라우저에만 임시로
+        # 들고 있던 로직을 업로드 시점에 한 번만 계산해 DB에 고정하는 것으로 옮김.
+        first_name = files[0].filename or "제목 없는 인수인계서"
+        label = first_name if len(files) == 1 else f"{first_name} 외 {len(files) - 1}개"
     else:
         parsed_chapters = _parse_chapters_json(chapters)
+        label = parsed_chapters[0]["title"] if parsed_chapters else "제목 없는 인수인계서"
 
     document_id = str(uuid.uuid4())
-    chapter_rows = _save_and_index_chapters(db, document_id, mentor_id, parsed_chapters)
+    chapter_rows = _save_and_index_chapters(db, document_id, mentor_id, parsed_chapters, label)
 
     return {"document_id": document_id, "chapters": _chapters_to_response(document_id, chapter_rows)}
+
+
+@router.get("/document")
+def list_documents(
+    mentor_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """이 사수가 올린 문서 목록, 최신순 (guidelines 3-2 신설 — 배정 화면 드롭다운용).
+
+    기존엔 이 목록을 프론트 브라우저의 localStorage로만 임시 관리해서 다른 브라우저/
+    기기에서는 안 보이는 문제가 있었음(api/documentHistory.js) — DB 기반으로 교체.
+    """
+    require_role(current_user, "mentor")
+    require_self(current_user, mentor_id)
+
+    rows = list_documents_for_mentor(db, mentor_id)
+    return [
+        {"document_id": r.document_id, "label": r.label, "uploaded_at": r.uploaded_at}
+        for r in rows
+    ]
 
 
 @router.get("/document/{document_id}/chapters")
