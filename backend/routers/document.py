@@ -190,6 +190,7 @@ async def upload_document(
     mentor_id: str = Form(...),
     files: list[UploadFile] | None = File(None),
     chapters: str | None = Form(None),  # JSON 문자열: [{"title": "...", "content": "..."}]
+    label: str | None = Form(None),  # 목록 화면용 제목. 안 보내면 아래 기본 규칙으로 계산 (신설)
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -199,9 +200,16 @@ async def upload_document(
     지원하기 위함(신설). 각 파일을 순서대로 독립적으로 자동 파싱해서, 그 결과 챕터를
     받은 순서 그대로 이어붙인다 — 파일 간 챕터 번호가 겹쳐도 chapter_id는 파일과
     무관하게 매번 새로 발급되므로 문제없다.
+
+    label을 직접 입력하면 그 값을 그대로 쓰고, 비워두면 기존 기본 규칙(파일 모드는
+    첫 파일명에서 확장자 제거, chapters 모드는 첫 챕터 제목)으로 계산한다. 수정 API는
+    따로 안 둔다 — 문서 목록을 훑어보는 화면 자체가 없고(배정 화면 드롭다운에만
+    쓰임), 잘못 지었으면 다시 올리는 게 더 단순하다.
     """
     require_role(current_user, "mentor")
     require_self(current_user, mentor_id)
+
+    label_input = label.strip() if label else ""
 
     has_files = bool(files)
     if not has_files and chapters is None:
@@ -233,13 +241,15 @@ async def upload_document(
         # fallback_title과 같은 rsplit 규칙을 써서 두 값이 서로 어긋나지 않게 한다.
         first_name_raw = files[0].filename or "제목 없는 인수인계서"
         first_name = first_name_raw.rsplit(".", 1)[0] if "." in first_name_raw else first_name_raw
-        label = first_name if len(files) == 1 else f"{first_name} 외 {len(files) - 1}개"
+        default_label = first_name if len(files) == 1 else f"{first_name} 외 {len(files) - 1}개"
     else:
         parsed_chapters = _parse_chapters_json(chapters)
-        label = parsed_chapters[0]["title"] if parsed_chapters else "제목 없는 인수인계서"
+        default_label = parsed_chapters[0]["title"] if parsed_chapters else "제목 없는 인수인계서"
+
+    final_label = label_input or default_label
 
     document_id = str(uuid.uuid4())
-    chapter_rows = _save_and_index_chapters(db, document_id, mentor_id, parsed_chapters, label)
+    chapter_rows = _save_and_index_chapters(db, document_id, mentor_id, parsed_chapters, final_label)
 
     return {"document_id": document_id, "chapters": _chapters_to_response(document_id, chapter_rows)}
 

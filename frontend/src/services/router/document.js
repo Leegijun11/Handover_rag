@@ -10,22 +10,26 @@ import apiClient from "../../api/client";
 // Content-Type은 직접 지정하지 않는다 — FormData를 넘기면 axios가 헤더를 브라우저에
 // 맡겨서 multipart 경계(boundary) 문자열이 자동으로 붙는다. 직접 "multipart/form-data"로
 // 박으면 boundary가 빠져 서버가 파싱하지 못한다.
-function buildUploadForm(mentorId) {
+// label은 목록 화면(배정 드롭다운)에 보여줄 제목. 비우면 서버가 기본 규칙으로
+// 계산한다(파일 모드: 첫 파일명에서 확장자 제거, chapters 모드: 첫 챕터 제목) —
+// routers/document.py upload_document 참고.
+function buildUploadForm(mentorId, label) {
   const formData = new FormData();
   formData.append("mentor_id", mentorId);
+  if (label && label.trim()) formData.append("label", label.trim());
   return formData;
 }
 
-export function uploadDocumentFiles(mentorId, files) {
-  const formData = buildUploadForm(mentorId);
+export function uploadDocumentFiles(mentorId, files, label) {
+  const formData = buildUploadForm(mentorId, label);
   // 같은 필드명("files")으로 여러 번 append하면 FastAPI가 list[UploadFile]로 받는다
   // (routers/document.py — 파일 여러 개로 나뉜 인수인계서 지원, guidelines 3-2 신설).
   files.forEach((file) => formData.append("files", file));
   return apiClient.post("/document/upload", formData);
 }
 
-export function uploadDocumentChapters(mentorId, chapters) {
-  const formData = buildUploadForm(mentorId);
+export function uploadDocumentChapters(mentorId, chapters, label) {
+  const formData = buildUploadForm(mentorId, label);
   // 서버가 Form 필드로 받은 뒤 json.loads로 파싱한다 (routers/document.py _parse_chapters_json).
   formData.append("chapters", JSON.stringify(chapters));
   return apiClient.post("/document/upload", formData);

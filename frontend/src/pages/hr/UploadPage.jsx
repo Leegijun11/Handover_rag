@@ -31,6 +31,7 @@ function UploadPage() {
 
   const [tab, setTab] = useState("file"); // file | manual
   const [files, setFiles] = useState([]); // 인수인계서가 파일 여러 개로 나뉜 경우 지원 (guidelines 3-2)
+  const [label, setLabel] = useState(""); // 목록 화면(배정 드롭다운)용 제목 — 비우면 서버가 기본 규칙으로 계산
   const [chapters, setChapters] = useState([newChapter(), newChapter()]);
   const [usingTemplate, setUsingTemplate] = useState(false);
   const [error, setError] = useState("");
@@ -89,13 +90,14 @@ function UploadPage() {
     try {
       const { data } =
         tab === "file"
-          ? await uploadDocumentFiles(mentor.user_id, files)
+          ? await uploadDocumentFiles(mentor.user_id, files, label)
           : await uploadDocumentChapters(
               mentor.user_id,
               filledChapters.map(({ title, content }) => ({
                 title: title.trim(),
                 content: content.trim(),
               })),
+              label,
             );
       setResult({ ...data, mode: tab });
       // 배정 화면 드롭다운용 대표 라벨은 이제 서버가 업로드 시점에 계산해서 저장한다
@@ -103,6 +105,7 @@ function UploadPage() {
       // 어느 기기에서 로그인해도 배정 화면에서 바로 보인다.
       // 성공한 입력은 비워서, 같은 문서를 두 번 올리는 실수를 줄인다.
       setFiles([]);
+      setLabel("");
       if (fileInputRef.current) fileInputRef.current.value = "";
       clearForm();
     } catch (err) {
@@ -192,6 +195,25 @@ function UploadPage() {
       )}
 
       <form onSubmit={handleSubmit}>
+        <Field
+          label="인수인계서 제목 (선택)"
+          hint={
+            tab === "file"
+              ? "비워두면 첫 파일명(확장자 제외)으로 저장됩니다"
+              : "비워두면 첫 번째 업무 제목으로 저장됩니다"
+          }
+        >
+          {(props) => (
+            <input
+              {...props}
+              type="text"
+              placeholder="예: 상품팀 인수인계서"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+            />
+          )}
+        </Field>
+
         {tab === "file" ? (
           <>
             <label
