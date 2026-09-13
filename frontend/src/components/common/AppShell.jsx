@@ -30,7 +30,12 @@ function AppShell({ children }) {
   const navigate = useNavigate();
   const user = getCurrentUser();
   const menu = NAV[user?.role] || [];
-  const { mentorName } = useNewcomerScope();
+  const { mentorName, checklistItems } = useNewcomerScope();
+  // 챗봇 화면 등 체크리스트 화면 밖에서는 진행 상황을 확인할 방법이 없다는 지적으로 신설
+  // — 좌측 메뉴의 "체크리스트" 옆에 진행 상황만 숫자로 보여준다. 처음엔 제목을 전부
+  // 나열했는데, 사이드바 폭(208px)에 다 안 들어가 항목이 많아지면 오히려 안 읽혔다 —
+  // 자세한 목록은 어차피 클릭하면 나오는 체크리스트 페이지의 몫으로 남긴다.
+  const doneCount = checklistItems.filter((item) => item.status === "done").length;
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
@@ -91,6 +96,11 @@ function AppShell({ children }) {
               className={({ isActive }) => (isActive ? "active" : undefined)}
             >
               {item.label}
+              {item.to === "/checklist" && checklistItems.length > 0 && (
+                <span className="nav-badge">
+                  {doneCount}/{checklistItems.length}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>

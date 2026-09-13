@@ -1,12 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { getCurrentUser } from "../../api/session";
 import { formatDate } from "../../api/datetime";
-import {
-  completeChecklistItem,
-  getChecklist,
-  uncompleteChecklistItem,
-} from "../../services/router/checklist";
+import { completeChecklistItem, uncompleteChecklistItem } from "../../services/router/checklist";
 import { getChapters } from "../../services/router/document";
 import { useNewcomerScope } from "../../components/common/NewcomerScope";
 import ChapterViewer from "../../components/common/ChapterViewer";
@@ -25,39 +21,33 @@ import Button from "../../components/common/Button";
  *
  * 완료 여부가 사수 리포트로 간다는 사실은 이 화면에 쓰지 않는다 — 알면 체크 행동 자체가
  * 왜곡돼서 신호가 무의미해진다 (1-7).
+ *
+ * 목록 자체(items)는 이제 이 화면 로컬 상태가 아니라 NewcomerScope가 들고 있다 — 좌측
+ * 메뉴(AppShell)도 같은 목록의 완료/미완료 요약을 보여주는데, 화면마다 따로 부르면 체크
+ * 하나 눌렀을 때 본문과 메뉴가 다른 시점의 값을 보여주는 문제가 생긴다. 그래서 완료/취소
+ * 후에도 로컬 load() 대신 refreshChecklist()로 같은 소스를 갱신한다.
  */
 function ChecklistPage() {
   const user = getCurrentUser();
   const newcomerId = user?.user_id;
-  const { assignment, mentorName } = useNewcomerScope();
+  const {
+    assignment,
+    mentorName,
+    checklistItems: items,
+    checklistLoading: loading,
+    checklistError,
+    refreshChecklist,
+  } = useNewcomerScope();
   const documentId = assignment?.document_id;
 
   const [chapters, setChapters] = useState([]);
   const [openChapterId, setOpenChapterId] = useState(null);
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  // 목록 조회 실패(checklistError)와 별개로, 체크/취소 액션 자체가 실패했을 때 쓰는 에러.
+  const [actionError, setActionError] = useState("");
+  const error = actionError || checklistError;
   // 처리 중인 항목 하나. 값이 있으면 목록 전체의 체크박스를 잠근다 —
   // 응답을 기다리는 동안 다른 항목을 연달아 누르면 어느 것이 반영됐는지 알 수 없다.
   const [pending, setPending] = useState(null);
-
-  const load = useCallback(async () => {
-    if (!newcomerId) return;
-    setLoading(true);
-    setError("");
-    try {
-      const { data } = await getChecklist(newcomerId);
-      setItems(data || []);
-    } catch (err) {
-      setError(err.userMessage || "체크리스트를 불러오지 못했습니다");
-    } finally {
-      setLoading(false);
-    }
-  }, [newcomerId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   // 항목에 연결된 업무의 본문을 바로 읽을 수 있게 챕터를 미리 받아둔다.
   // 읽어야 체크할 수 있는 항목("○○ 읽어보기")이 여기서 성립한다.
@@ -76,16 +66,18 @@ function ChecklistPage() {
     if (pending) return;
     const done = item.status === "done";
     setPending(item.item_id);
-    setError("");
+    setActionError("");
     try {
       if (done) {
         await uncompleteChecklistItem(item.item_id, newcomerId);
       } else {
         await completeChecklistItem(item.item_id, newcomerId);
       }
-      await load();
+      await refreshChecklist();
     } catch (err) {
-      setError(err.userMessage || (done ? "완료를 취소하지 못했습니다" : "완료 처리에 실패했습니다"));
+      setActionError(
+        err.userMessage || (done ? "완료를 취소하지 못했습니다" : "완료 처리에 실패했습니다"),
+      );
     } finally {
       setPending(null);
     }
@@ -108,7 +100,7 @@ function ChecklistPage() {
         <div className="empty">불러오는 중…</div>
       ) : error && items.length === 0 ? (
         <div className="actions">
-          <Button onClick={load}>다시 불러오기</Button>
+          <Button onClick={refreshChecklist}>다시 불러오기</Button>
         </div>
       ) : items.length === 0 ? (
         <div className="empty">
@@ -148,10 +140,13 @@ function ChecklistPage() {
                         : "아직 완료하지 않았습니다"}
                   </div>
                 </div>
-                {/* 연결된 업무가 있으면 본문을 바로 열어준다 — 읽고 체크하는 흐름이 한 화면에서 끝난다. */}
+                {/* 연결된 업무가 있으면 인수인계서를 그 챕터부터 열어준다 — 읽고 체크하는
+                    흐름이 한 화면에서 끝난다. "업무 보기"라고 하면 그 업무만 보여주는
+                    것처럼 들리는데 실제로는 인수인계서 전체(목차 포함)가 열려서,
+                    이름을 실제 동작에 맞게 고쳤다. */}
                 {item.chapter_id && chapters.some((c) => c.chapter_id === item.chapter_id) && (
                   <Button size="sm" onClick={() => setOpenChapterId(item.chapter_id)}>
-                    업무 보기
+                    관련 인수인계서 보기
                   </Button>
                 )}
                 {done && !busy && <span className="badge badge-done">완료</span>}
