@@ -506,7 +506,8 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
 .report-summary .tile.warn .n { color: var(--warn); }
 
 .chart { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.chart svg { max-width: 100%; height: auto; }
+/* viewBox 기준으로 글자까지 함께 커지므로 폭을 묶어둔다 — 넓은 카드에서 레이더 라벨이 과하게 커진다 */
+.chart svg { width: 100%; max-width: 320px; height: auto; }
 /* SVG 글자는 fill로 칠한다. 계열색을 쓰지 않고 본문 색 토큰을 그대로 쓴다 */
 .chart-axis { fill: var(--text-muted); font-size: 11px; }
 .chart-axis-value { fill: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
