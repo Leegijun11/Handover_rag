@@ -22,7 +22,7 @@ from typing import Literal, TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from langgraph.graph import END, StateGraph
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from core.auth import CurrentUser, get_current_user, require_self
@@ -44,7 +44,10 @@ NOT_FOUND_SENTINEL = "NOT_FOUND_IN_DOCUMENT"
 
 class AskRequest(BaseModel):
     newcomer_id: str
-    question: str
+    # 프론트(ChatPage.jsx MAX_QUESTION_LENGTH)는 500자로 막지만, API를 직접 호출하면
+    # 그 제한을 우회할 수 있어서 서버 쪽에도 같은 값을 걸어둔다 — 임베딩+LLM 호출 비용이
+    # 질문 길이에 비례하므로 이것도 5-9번 비용 방어 항목 중 하나다.
+    question: str = Field(min_length=1, max_length=500)
 
 
 def _get_assignment_document_id(db: Session, newcomer_id: str) -> str | None:
@@ -200,14 +203,17 @@ def get_logs(
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    # 본인(신입) 또는 mentor만 조회 가능 — mentor가 실제 담당자인지까지는 아래 TODO 참고.
+    # 본인(신입) 또는 실제 담당 mentor만 조회 가능 (guidelines 3-9 조회 권한 원칙).
+    # mentor 쪽은 이전엔 role만 확인해서, newcomer_id만 알면 남의 신입 로그도
+    # 조회할 수 있었다 (TODO로 표시돼 있었으나 미해결 — 실제로 재현 가능한 취약점).
     if current_user["role"] == "newcomer":
         require_self(current_user, newcomer_id)
     else:
-        # TODO(연동 필요 — 팀원 B): 이 mentor가 실제로 이 newcomer_id를 담당하는지
-        # Assignment로 검증해야 함(3-9 문서 조회 권한과 같은 취지). 지금은 role=mentor면
-        # 통과 — 병합 후 반드시 보강 필요.
-        pass
+        assignment = get_assignment_by_newcomer(db, newcomer_id)
+        if assignment is None:
+            raise HTTPException(status_code=404, detail="배정된 적 없는 신입입니다")
+        if assignment.mentor_id != current_user["user_id"]:
+            raise HTTPException(status_code=403, detail="본인이 담당하는 신입이 아닙니다")
 
     rows = (
         db.query(ChatLogORM)
