@@ -11,7 +11,7 @@ const NAV = {
     { to: "/hr/upload", label: "인수인계서 업로드" },
     { to: "/hr/assign", label: "신입 배정" },
     { to: "/hr/checklist", label: "체크리스트 관리" },
-    { to: "/hr/report", label: "적응도 리포트" },
+    { to: "/hr/report", label: "리포트 관리" },
   ],
   newcomer: [
     { to: "/chat", label: "챗봇에게 물어보기" },

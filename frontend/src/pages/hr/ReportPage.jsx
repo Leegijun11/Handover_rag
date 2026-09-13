@@ -3,16 +3,21 @@ import { useCallback, useEffect, useState } from "react";
 import { getCurrentUser } from "../../api/session";
 import { formatDate, formatDateTime, parseServerDate, toServerDate } from "../../api/datetime";
 import { getChapters } from "../../services/router/document";
-import {
-  generateReport,
-  getLatestReport,
-  getReportHistory,
-} from "../../services/router/report";
+import { generateReport, getReportHistory } from "../../services/router/report";
 import NewcomerPicker from "../../components/hr/NewcomerPicker";
 import Button from "../../components/common/Button";
 
 /**
- * 적응도 리포트 열람 (guidelines 3-6, 4-3). 사수 전용 — 신입 화면에는 노출하지 않는다.
+ * 리포트 관리 (guidelines 3-6, 4-3). 사수 전용 — 신입 화면에는 노출하지 않는다.
+ *
+ * 목록 -> 상세 두 단계 화면으로 구성한다 (신설). 예전엔 최신 리포트를 곧장 보여주고
+ * 그 아래에 "생성 이력" 표를 곁다리로 붙였는데, 신입 한 명한테 리포트가 여러 개
+ * 쌓이면 "지금 뭘 보고 있는지"가 헷갈렸다 — 목록에서 날짜로 먼저 고르고 들어가는
+ * 흐름이 더 명확하다.
+ *
+ * GET /report/{newcomer_id}/history가 이미 생성 시각 역순 + sections 전체를 포함해서
+ * 내려주므로(report.py), 최신 리포트도 이 목록의 첫 번째 항목으로 취급하고 별도
+ * GET /report/{newcomer_id}는 부르지 않는다 — 같은 데이터를 두 번 받을 이유가 없다.
  *
  * 서버는 sections의 순서를 보장하지 않는다(관계에 정렬 기준이 없어서 DB가 주는 대로 온다).
  * 리포트를 다시 만들 때마다 카드 위치가 바뀌면 지난 리포트와 비교할 수 없으므로
@@ -141,46 +146,70 @@ function SignalBody({ section, chapterTitleOf }) {
   );
 }
 
+/** 리포트 상세 — 4개 신호 카드. 목록에서 고른 리포트 하나를 그대로 보여준다. */
+function ReportDetail({ report, chapterTitleOf, onBack }) {
+  const sections = sortSections(report.sections);
+  return (
+    <>
+      <div className="report-head">
+        <div>
+          <button type="button" className="link-back" onClick={onBack}>
+            ← 목록으로
+          </button>
+          <p className="page-desc" style={{ margin: "6px 0 0" }}>
+            {formatDate(report.period_start)} ~ {formatDate(report.period_end)} · 생성{" "}
+            {formatDateTime(report.generated_at)}
+          </p>
+        </div>
+      </div>
+
+      <div className="signal-grid">
+        {sections.map((section) => (
+          <div className="card signal" key={section.signal_type}>
+            <h4>{SIGNAL_TITLE[section.signal_type] || section.signal_type}</h4>
+            <div className="sig-key">{section.signal_type}</div>
+            <p className="summary">{section.summary}</p>
+            <SignalBody section={section} chapterTitleOf={chapterTitleOf} />
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 function ReportPage() {
   const mentor = getCurrentUser();
 
   const [assignment, setAssignment] = useState(null);
-  const [report, setReport] = useState(null);
   const [history, setHistory] = useState([]);
   const [chapters, setChapters] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [generating, setGenerating] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  // 목록 -> 상세. selectedReport가 있으면 상세를 보여준다.
+  const [selectedReport, setSelectedReport] = useState(null);
 
   const newcomerId = assignment?.newcomer_id;
   const documentId = assignment?.document_id;
+  const latest = history[0] || null;
 
   const load = useCallback(async () => {
     if (!newcomerId) return;
     setLoading(true);
     setError("");
-    setReport(null);
-    setHistory([]);
-    try {
-      const { data } = await getLatestReport(newcomerId);
-      setReport(data);
-    } catch (err) {
-      // 404는 "아직 만든 적 없음"이라 에러가 아니다.
-      if (err.response?.status !== 404) {
-        setError(err.userMessage || "리포트를 불러오지 못했습니다");
-      }
-    }
     try {
       const { data } = await getReportHistory(newcomerId);
       setHistory(data || []);
-    } catch {
+    } catch (err) {
+      setError(err.userMessage || "리포트 목록을 불러오지 못했습니다");
       setHistory([]);
     }
     setLoading(false);
   }, [newcomerId]);
 
   useEffect(() => {
+    setSelectedReport(null); // 신입을 바꾸면 상세 화면에 남아있지 않고 목록부터 다시 본다
     load();
   }, [load]);
 
@@ -196,7 +225,7 @@ function ReportPage() {
     };
   }, [documentId]);
 
-  const generatedAt = report ? parseServerDate(report.generated_at) : null;
+  const generatedAt = latest ? parseServerDate(latest.generated_at) : null;
   const lockUntil = generatedAt ? generatedAt.getTime() + REGENERATE_LOCK_MS : 0;
   const lockSecondsLeft = Math.max(0, Math.ceil((lockUntil - now) / 1000));
 
@@ -224,12 +253,15 @@ function ReportPage() {
       // 기간 기본값 (guidelines 3-6): 이전 리포트가 있으면 그 period_end부터, 처음이면 배정일부터.
       // 오프셋 없는 형식으로 보낸다 — 자세한 이유는 api/datetime.js 참고.
       const periodEnd = toServerDate(new Date());
-      const previousEnd = report ? parseServerDate(report.period_end) : null;
+      const previousEnd = latest ? parseServerDate(latest.period_end) : null;
       const assignedAt = parseServerDate(assignment?.assigned_at);
       const start = previousEnd || assignedAt || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
       await generateReport(newcomerId, toServerDate(start), periodEnd);
-      await load();
+      const { data } = await getReportHistory(newcomerId);
+      setHistory(data || []);
+      // 방금 만든 걸 바로 상세로 보여준다 — 목록에서 한 번 더 찾아 누르게 하지 않는다.
+      setSelectedReport(data?.[0] || null);
       setNow(Date.now());
     } catch (err) {
       setError(err.userMessage || "리포트를 만들지 못했습니다");
@@ -239,11 +271,9 @@ function ReportPage() {
     }
   }
 
-  const sections = report ? sortSections(report.sections) : [];
-
   return (
     <>
-      <h3 className="page-title">적응도 리포트</h3>
+      <h3 className="page-title">리포트 관리</h3>
       <p className="page-desc">담당 신입의 질문·체크리스트 기록에서 뽑은 적응 신호입니다.</p>
 
       <NewcomerPicker mentorId={mentor.user_id} value={assignment} onChange={setAssignment} />
@@ -256,70 +286,60 @@ function ReportPage() {
 
           {error && <div className="banner banner-error">{error}</div>}
 
-          <div className="report-head">
-            <div>
-              {report ? (
-                <p className="page-desc" style={{ margin: 0 }}>
-                  {formatDate(report.period_start)} ~ {formatDate(report.period_end)} · 생성{" "}
-                  {formatDateTime(report.generated_at)}
-                </p>
-              ) : (
-                <p className="page-desc" style={{ margin: 0 }}>
-                  아직 생성된 리포트가 없습니다.
-                </p>
-              )}
-            </div>
-            <div className="actions" style={{ margin: 0 }}>
-              <Button
-                variant="primary"
-                onClick={handleGenerate}
-                disabled={generating || lockSecondsLeft > 0}
-              >
-                {generating
-                  ? "만드는 중…"
-                  : lockSecondsLeft > 0
-                    ? `${Math.ceil(lockSecondsLeft / 60)}분 뒤 다시 생성`
-                    : report
-                      ? "지금 다시 생성"
-                      : "첫 리포트 만들기"}
-              </Button>
-            </div>
-          </div>
-
-          {generating && (
-            <div className="banner banner-info">
-              질문 기록과 체크리스트를 모아 신호 4개를 계산하고 있습니다. 20초쯤 걸립니다.
-            </div>
-          )}
-
-          {!generating && lockSecondsLeft > 0 && (
-            <div className="banner banner-info">
-              리포트는 5분에 한 번만 만들 수 있습니다. 방금 만든 결과를 보고 계십니다.
-            </div>
-          )}
-
-          {loading ? (
-            <div className="empty">불러오는 중…</div>
-          ) : !report ? (
-            <div className="empty">
-              질문과 체크리스트가 어느 정도 쌓인 뒤에 만들면 더 정확합니다.
-            </div>
+          {selectedReport ? (
+            <ReportDetail
+              report={selectedReport}
+              chapterTitleOf={chapterTitleOf}
+              onBack={() => setSelectedReport(null)}
+            />
           ) : (
             <>
-              <div className="signal-grid">
-                {sections.map((section) => (
-                  <div className="card signal" key={section.signal_type}>
-                    <h4>{SIGNAL_TITLE[section.signal_type] || section.signal_type}</h4>
-                    <div className="sig-key">{section.signal_type}</div>
-                    <p className="summary">{section.summary}</p>
-                    <SignalBody section={section} chapterTitleOf={chapterTitleOf} />
-                  </div>
-                ))}
+              <div className="report-head">
+                <div>
+                  <p className="page-desc" style={{ margin: 0 }}>
+                    {history.length > 0
+                      ? `생성된 리포트 ${history.length}건`
+                      : "아직 생성된 리포트가 없습니다."}
+                  </p>
+                </div>
+                <div className="actions" style={{ margin: 0 }}>
+                  <Button
+                    variant="primary"
+                    onClick={handleGenerate}
+                    disabled={generating || lockSecondsLeft > 0}
+                  >
+                    {generating
+                      ? "만드는 중…"
+                      : lockSecondsLeft > 0
+                        ? `${Math.ceil(lockSecondsLeft / 60)}분 뒤 다시 생성`
+                        : latest
+                          ? "새 리포트 만들기"
+                          : "첫 리포트 만들기"}
+                  </Button>
+                </div>
               </div>
 
-              {history.length > 1 && (
-                <div className="card" style={{ marginTop: 16 }}>
-                  <p className="card-title">생성 이력</p>
+              {generating && (
+                <div className="banner banner-info">
+                  질문 기록과 체크리스트를 모아 신호 4개를 계산하고 있습니다. 20초쯤 걸립니다.
+                </div>
+              )}
+
+              {!generating && lockSecondsLeft > 0 && (
+                <div className="banner banner-info">
+                  리포트는 5분에 한 번만 만들 수 있습니다. 방금 만든 결과는 목록 맨 위에 있습니다.
+                </div>
+              )}
+
+              {loading ? (
+                <div className="empty">불러오는 중…</div>
+              ) : history.length === 0 ? (
+                <div className="empty">
+                  질문과 체크리스트가 어느 정도 쌓인 뒤에 만들면 더 정확합니다.
+                </div>
+              ) : (
+                <div className="card">
+                  <p className="card-title">생성 날짜별 리포트</p>
                   <table>
                     <thead>
                       <tr>
@@ -329,21 +349,23 @@ function ReportPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {history.map((row) => (
+                      {history.map((row, index) => (
                         <tr key={row.report_id}>
-                          <td>{formatDateTime(row.generated_at)}</td>
+                          <td>
+                            {formatDateTime(row.generated_at)}
+                            {index === 0 && (
+                              <span className="badge badge-manual" style={{ marginLeft: 6 }}>
+                                최신
+                              </span>
+                            )}
+                          </td>
                           <td>
                             {formatDate(row.period_start)} ~ {formatDate(row.period_end)}
                           </td>
                           <td style={{ textAlign: "right" }}>
-                            {row.report_id === report.report_id ? (
-                              <span className="hint">보는 중</span>
-                            ) : (
-                              // 히스토리 응답에 sections가 통째로 들어 있어서 추가 호출이 필요 없다.
-                              <Button size="sm" onClick={() => setReport(row)}>
-                                보기
-                              </Button>
-                            )}
+                            <Button size="sm" onClick={() => setSelectedReport(row)}>
+                              자세히 보기
+                            </Button>
                           </td>
                         </tr>
                       ))}
