@@ -129,9 +129,13 @@ function ChecklistManagePage() {
     setNotice("");
     try {
       const { data } = await draftChecklist(documentId);
-      // 초안은 전부 선택된 상태로 시작한다 — 사수가 빼는 편이 하나씩 고르는 것보다 빠르다.
+      const existing = new Set(items.map((item) => item.title));
+      // 이미 저장된 항목과 title이 같은 후보는 후보 목록 자체에서 뺀다 — 두 번 눌러도
+      // 중복 저장 유혹이 안 생기게. 초안은 전부 선택된 상태로 시작한다(빼는 게 고르는 것보다 빠름).
       setDraft(
-        (data || []).map((c, i) => ({ ...c, key: `${i}-${c.title}`, checked: true, source: "ai_draft" })),
+        (data || [])
+          .filter((c) => !existing.has(c.title))
+          .map((c, i) => ({ ...c, key: `${i}-${c.title}`, checked: true, source: "ai_draft" })),
       );
       setDraftKind("ai");
     } catch (err) {
@@ -154,13 +158,15 @@ function ChecklistManagePage() {
     setNotice("");
     const existing = new Set(items.map((item) => item.title));
     const candidates = chapters
+      // 이미 저장된 항목과 title이 같은 후보는 아예 목록에서 뺀다 — 전엔 기본 체크만
+      // 해제했는데, 그러면 목록에 계속 남아 있어서 실수로 다시 체크하고 저장할 수 있었다.
+      .filter((chapter) => !existing.has(readingTaskTitle(chapter.title)))
       .map((chapter, i) => ({
         title: readingTaskTitle(chapter.title),
         chapter_id: chapter.chapter_id,
         key: `read-${i}-${chapter.chapter_id}`,
         source: "manual",
-        // 이미 있는 항목은 기본으로 빼둔다 — 두 번 눌러도 중복 저장되지 않게.
-        checked: !existing.has(readingTaskTitle(chapter.title)),
+        checked: true,
       }));
     setDraft(candidates);
     setDraftKind("reading");
@@ -327,8 +333,10 @@ function ChecklistManagePage() {
                 {draft.length === 0 ? (
                   <div className="empty">
                     {draftKind === "reading"
-                      ? "인수인계서에 등록된 업무가 없습니다."
-                      : "후보를 만들지 못했습니다."}
+                      ? chapters.length
+                        ? "모든 업무에 읽기 항목이 이미 있습니다."
+                        : "인수인계서에 등록된 업무가 없습니다."
+                      : "후보를 만들지 못했거나 이미 저장된 항목과 모두 겹칩니다."}
                   </div>
                 ) : (
                   <>
@@ -361,6 +369,13 @@ function ChecklistManagePage() {
                       ))}
                     </ul>
                     <div className="actions actions-end">
+                      <Button
+                        onClick={() =>
+                          setDraft((prev) => prev.map((d) => ({ ...d, checked: true })))
+                        }
+                      >
+                        모두 선택
+                      </Button>
                       <Button
                         onClick={() =>
                           setDraft((prev) => prev.map((d) => ({ ...d, checked: false })))
