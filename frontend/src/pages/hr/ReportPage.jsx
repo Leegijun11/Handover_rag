@@ -81,7 +81,7 @@ function TypeBars({ counts, previousCounts }) {
   );
 }
 
-function SignalBody({ section, previousSection, chapterTitleOf }) {
+function SignalBody({ section, previousSection, chapterTitleOf, report }) {
   const data = section.data || {};
 
   if (section.signal_type === "growth_curve") {
@@ -133,22 +133,42 @@ function SignalBody({ section, previousSection, chapterTitleOf }) {
       </div>
     );
   }
+  // "전반부/후반부"라는 말 대신 실제 날짜 구간을 보여준다. 중간 시점은 report.py와 같은
+  // 방식(기간 시작 + 기간 길이의 절반)으로 계산한다.
+  const start = parseServerDate(report?.period_start);
+  const end = parseServerDate(report?.period_end);
+  const mid = start && end ? new Date((start.getTime() + end.getTime()) / 2) : null;
+  const md = (d) => (d ? `${d.getMonth() + 1}/${d.getDate()}` : "-");
+  const first = data.first_half_questions;
+  const second = data.second_half_questions;
+  const peak = Math.max(first, second, 1);
+  const rows = [
+    { key: "first", label: "기간 앞쪽 절반", range: `${md(start)} ~ ${md(mid)}`, value: first },
+    { key: "second", label: "기간 뒤쪽 절반", range: `${md(mid)} ~ ${md(end)}`, value: second },
+  ];
   return (
-    <div className="stat-row">
-      <div className="stat">
-        <div className="n">{data.first_half_questions}</div>
-        <div className="k">전반부 질문</div>
+    <div className="flow">
+      <div className="flow-verdict">
+        <span className={`chip ${data.dropped_sharply ? "chip-warn" : "chip-good"}`}>
+          {data.dropped_sharply ? "질문 급감" : "정상"}
+        </span>
+        <span className="flow-rule">뒤쪽 절반 질문이 앞쪽의 30% 이하로 줄면 급감으로 봅니다</span>
       </div>
-      <div className="stat">
-        <div className="n">{data.second_half_questions}</div>
-        <div className="k">후반부 질문</div>
-      </div>
-      <div className="stat">
-        <div className={`n ${data.dropped_sharply ? "warn" : "good"}`}>
-          {data.dropped_sharply ? "급감" : "정상"}
+      {rows.map((row) => (
+        <div className="flow-row" key={row.key}>
+          <div className="flow-label">
+            <b>{row.label}</b>
+            <span>{row.range}</span>
+          </div>
+          <span className="bar">
+            <i
+              className={row.key === "second" && data.dropped_sharply ? "low" : undefined}
+              style={{ width: `${Math.round((row.value / peak) * 100)}%` }}
+            />
+          </span>
+          <span className="flow-num">{row.value}건</span>
         </div>
-        <div className="k">질문 추이</div>
-      </div>
+      ))}
     </div>
   );
 }
@@ -227,25 +247,18 @@ function ReportDetail({
       <header className="rpt-head">
         <p className="rpt-kicker">신입 적응도 리포트</p>
         <h4 className="rpt-title">{newcomerName || "신입"}</h4>
+        {/* 라벨 칸 폭을 고정한 2×2 정보 표 — 값 길이가 제각각이어도 라벨과 값의 시작선이 맞는다 */}
         <dl className="rpt-meta">
-          <div>
-            <dt>분석 기간</dt>
-            <dd>
-              {formatDate(report.period_start)} ~ {formatDate(report.period_end)}
-            </dd>
-          </div>
-          <div>
-            <dt>담당 사수</dt>
-            <dd>{mentorName || "-"}</dd>
-          </div>
-          <div>
-            <dt>배정 문서</dt>
-            <dd>{documentLabel || "-"}</dd>
-          </div>
-          <div>
-            <dt>생성 일시</dt>
-            <dd>{formatDateTime(report.generated_at)}</dd>
-          </div>
+          <dt>분석 기간</dt>
+          <dd>
+            {formatDate(report.period_start)} ~ {formatDate(report.period_end)}
+          </dd>
+          <dt>담당 사수</dt>
+          <dd>{mentorName || "-"}</dd>
+          <dt>배정 문서</dt>
+          <dd title={documentLabel || ""}>{documentLabel || "-"}</dd>
+          <dt>생성 일시</dt>
+          <dd>{formatDateTime(report.generated_at)}</dd>
         </dl>
       </header>
 
@@ -349,6 +362,7 @@ function ReportDetail({
                           <span className="score-num">{score}</span>
                         </div>
                       )}
+                      <div className="sub basis">{current.basis[axis.key]}</div>
                     </td>
                     <td className="num">
                       <Delta value={previous ? delta : null} />
@@ -374,6 +388,7 @@ function ReportDetail({
                 section={section}
                 previousSection={previousOf(section.signal_type)}
                 chapterTitleOf={chapterTitleOf}
+                report={report}
               />
               <p className="rpt-card-note">{section.summary}</p>
             </div>

@@ -496,17 +496,24 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
 .rpt .link-back { margin-bottom: 14px; }
 .rpt .muted { color: var(--text-faint); }
 
-.rpt-head { padding-bottom: 18px; border-bottom: 2px solid var(--text); }
+.rpt-head { padding-bottom: 20px; border-bottom: 2px solid var(--text); }
 .rpt-kicker {
   margin: 0; font-size: 11.5px; font-weight: 700; letter-spacing: .08em; color: var(--accent);
 }
 .rpt-title { margin: 4px 0 14px; font-size: 24px; font-weight: 700; letter-spacing: -.02em; }
+/* 기본 정보 표 — 라벨 칸(회색) 폭을 고정해 두 줄의 라벨·값 시작선을 맞춘다 */
 .rpt-meta {
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 20px; margin: 0;
+  display: grid; grid-template-columns: 84px minmax(0, 1fr) 84px minmax(0, 1fr);
+  margin: 0; border-top: 1px solid var(--border); border-left: 1px solid var(--border);
+  font-size: 13px;
 }
-.rpt-meta dt { font-size: 11.5px; color: var(--text-faint); }
+.rpt-meta dt, .rpt-meta dd {
+  margin: 0; padding: 9px 12px;
+  border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+}
+.rpt-meta dt { background: var(--surface-2); color: var(--text-muted); font-size: 12px; font-weight: 600; }
 .rpt-meta dd {
-  margin: 2px 0 0; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;
+  font-weight: 600; font-variant-numeric: tabular-nums;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
@@ -573,6 +580,7 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
 .score-bar .bar { flex: 1; height: 8px; }
 .score-bar .bar i.low { background: var(--warn); }
 .score-num { min-width: 28px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rpt-table .basis { margin-top: 3px; font-size: 11.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 
 /* 근거 데이터: 선으로 나눈 2열 격자 */
 .rpt-evidence {
@@ -588,6 +596,23 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
 .rpt-card .stat .n.warn { color: var(--warn); }
 .rpt-card .stat .n.good { color: var(--success); }
 .bar-prev { font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+/* 질문 흐름(침묵 위험) — 판정 칩, 날짜 구간별 막대 두 줄 */
+.flow { display: flex; flex-direction: column; gap: 12px; }
+.flow-verdict { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.flow-rule { font-size: 12px; color: var(--text-faint); }
+.chip {
+  display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
+}
+.chip-good { background: var(--success-soft); color: var(--success); }
+.chip-warn { background: var(--warn-soft); color: var(--warn); }
+.flow-row { display: grid; grid-template-columns: 112px minmax(0, 1fr) 44px; align-items: center; gap: 12px; }
+.flow-label { display: flex; flex-direction: column; line-height: 1.35; }
+.flow-label b { font-size: 12.5px; font-weight: 600; }
+.flow-label span { font-size: 11.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.flow-row .bar { height: 10px; }
+.flow-row .bar i.low { background: var(--warn); }
+.flow-num { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 
 .rpt-foot {
   margin-top: 20px; padding: 12px 14px; background: var(--surface-2);
@@ -652,7 +677,7 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
   .demo-grid { grid-template-columns: 1fr; }
   .signal-grid { grid-template-columns: 1fr; }
   .rpt { padding: 18px 16px 20px; }
-  .rpt-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rpt-meta { grid-template-columns: 76px minmax(0, 1fr); }
   .rpt-overview { grid-template-columns: 1fr; }
   .rpt-evidence { grid-template-columns: 1fr; }
   /* 좁은 화면에서는 도넛 범례를 아래로 내린다 */

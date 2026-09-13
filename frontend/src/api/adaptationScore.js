@@ -34,7 +34,7 @@ export const SCORE_AXES = [
   {
     key: "alignment",
     label: "이해 일치도",
-    formula: "1 − (완료 후 다시 묻는 항목 ÷ 완료 항목)",
+    formula: "완료 후 같은 업무를 다시 물은 정도 — 첫 질문 1건은 정상으로 보고 2건째부터 감점, 4건 이상이면 0점",
     meaning: "체크한 만큼 이해했는지",
     strength: "완료로 체크한 업무를 다시 묻지 않습니다.",
     concern: "완료로 체크한 업무를 이후에도 다시 묻고 있습니다.",
@@ -42,10 +42,10 @@ export const SCORE_AXES = [
   {
     key: "continuity",
     label: "질문 지속성",
-    formula: "후반부 질문 ÷ 전반부 질문 (최대 100)",
+    formula: "기간 뒤쪽 절반 질문 ÷ 앞쪽 절반 질문 (최대 100)",
     meaning: "질문이 끊기지 않고 이어지는지",
     strength: "질문이 끊기지 않고 꾸준히 이어집니다.",
-    concern: "기간 후반부에 질문이 크게 줄었습니다.",
+    concern: "기간 뒤쪽 절반에 질문이 크게 줄었습니다.",
   },
   {
     key: "progress",
@@ -63,7 +63,7 @@ const pct = (ratio) => Math.round(Math.max(0, Math.min(1, ratio)) * 100);
  * @param report    AdaptationReport (sections 포함)
  * @param chapters  배정 문서의 DocumentChapter 목록
  * @param checklist 신입의 ChecklistItem 목록
- * @returns {{ axes: Record<string, number|null>, total: number|null }}
+ * @returns {{ axes: Record<string, number|null>, basis: Record<string, string>, total: number|null }}
  */
 export function computeAdaptationScore(report, chapters, checklist) {
   const data = Object.fromEntries(
@@ -73,7 +73,7 @@ export function computeAdaptationScore(report, chapters, checklist) {
   const counts = growth.counts || {};
   const questions = growth.total || 0;
   const heat = data.chapter_heatmap?.counts || {};
-  const gaps = (data.gap_task?.gap_items || []).length;
+  const gapItems = data.gap_task?.gap_items || [];
   const silence = data.silence_risk || {};
 
   // 체크리스트는 현재 상태를 받아오므로, 리포트 기간이 끝난 시점까지 완료한 것만 센다.
@@ -96,11 +96,36 @@ export function computeAdaptationScore(report, chapters, checklist) {
   const axes = {
     depth: questions ? pct(((counts.judgment || 0) + (counts.advanced || 0)) / questions) : null,
     coverage: tops.size ? pct(touched.size / tops.size) : null,
-    alignment: done.length ? pct(1 - gaps / done.length) : null,
+    // 서버의 gap_task는 완료 후 같은 업무 질문이 1건만 있어도 그 항목을 센다. 그대로 비율로
+    // 쓰면 "읽어보기를 체크하고 한 번 더 물어본" 자연스러운 행동까지 불일치가 되어 점수가
+    // 0 아니면 100으로만 갈린다. 그래서 첫 질문 1건은 허용하고, 2건째부터 1/3씩 감점한다.
+    alignment: done.length
+      ? pct(
+          1 -
+            done.reduce((sum, item) => {
+              const asked =
+                gapItems.find((g) => g.title === item.title)?.question_count_after_complete || 0;
+              return sum + Math.min(Math.max(asked - 1, 0), 3) / 3;
+            }, 0) /
+              done.length,
+        )
+      : null,
     continuity: silence.first_half_questions
       ? pct(silence.second_half_questions / silence.first_half_questions)
       : null,
     progress: checklist?.length ? pct(done.length / checklist.length) : null,
+  };
+
+  // 점수 옆에 붙이는 근거 숫자 — 표본이 작으면(완료 2개 등) 점수를 그만큼 가볍게 읽게 한다.
+  const basis = {
+    depth: `질문 ${questions}건 기준`,
+    coverage: `대분류 ${tops.size}개 중 ${touched.size}개`,
+    alignment: `완료 ${done.length}개 기준`,
+    continuity:
+      silence.first_half_questions !== undefined
+        ? `앞 ${silence.first_half_questions}건 → 뒤 ${silence.second_half_questions}건`
+        : "기간 내 질문 없음",
+    progress: `${done.length} / ${(checklist || []).length}개 완료`,
   };
 
   const values = Object.values(axes).filter((v) => v !== null);
@@ -108,5 +133,5 @@ export function computeAdaptationScore(report, chapters, checklist) {
     ? Math.round(values.reduce((sum, v) => sum + v, 0) / values.length)
     : null;
 
-  return { axes, total };
+  return { axes, basis, total };
 }
