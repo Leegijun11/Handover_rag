@@ -61,7 +61,9 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-NOW = utcnow().replace(minute=0, second=0, microsecond=0)
+# 기준 시각을 "오늘 0시(UTC)"로 고정한다. 실행 시각을 기준으로 잡으면 몇 시에 돌리느냐에 따라
+# 질문 하나가 리포트 기간의 전반/후반을 넘나들어 신호 값이 바뀌고, 미리 맞춰둔 요약문과 어긋난다.
+NOW = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def at(days_ago: float, hour: int = 10) -> datetime:
