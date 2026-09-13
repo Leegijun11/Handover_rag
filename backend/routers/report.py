@@ -47,6 +47,20 @@ def _get_assignment_assigned_at(db: Session, newcomer_id: str) -> datetime | Non
     return row.assigned_at if row else None
 
 
+def _require_mentor_owns_newcomer(db: Session, current_user: CurrentUser, newcomer_id: str) -> None:
+    """이 사수가 실제로 이 신입을 담당하는지 검증 (guidelines 3-9 조회 권한 원칙).
+
+    이전엔 require_role(mentor)만 확인해서, mentor_id/newcomer_id 매칭 없이 role만
+    맞으면 어떤 사수든 newcomer_id만 알면 남의 신입 리포트를 조회·생성할 수 있었다
+    (TODO로 표시돼 있었으나 미해결 상태였음 — 실제로 재현 가능한 취약점이었음).
+    """
+    assignment = get_assignment_by_newcomer(db, newcomer_id)
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="배정된 적 없는 신입입니다")
+    if assignment.mentor_id != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="본인이 담당하는 신입이 아닙니다")
+
+
 def _get_checklist_items(db: Session, newcomer_id: str) -> list[dict]:
     """gap_task 신호(완료 후에도 관련 질문이 이어진 항목) 계산에 씀."""
     rows = db.query(ChecklistItemORM).filter_by(newcomer_id=newcomer_id).all()
@@ -193,8 +207,7 @@ def generate_report(
     db: Session = Depends(get_db),
 ):
     require_role(current_user, "mentor")
-    # TODO(연동 필요 — 팀원 B): 이 mentor가 실제로 이 newcomer_id를 담당하는지 Assignment로
-    # 검증해야 함(3-9 문서 조회 권한과 같은 취지). 지금은 role=mentor면 통과.
+    _require_mentor_owns_newcomer(db, current_user, payload.newcomer_id)
 
     now = datetime.now(timezone.utc)
 
@@ -260,6 +273,7 @@ def get_latest_report(
     db: Session = Depends(get_db),
 ):
     require_role(current_user, "mentor")
+    _require_mentor_owns_newcomer(db, current_user, newcomer_id)
     row = (
         db.query(AdaptationReportORM)
         .filter_by(newcomer_id=newcomer_id)
@@ -279,6 +293,7 @@ def get_report_history(
     db: Session = Depends(get_db),
 ):
     require_role(current_user, "mentor")
+    _require_mentor_owns_newcomer(db, current_user, newcomer_id)
     rows = (
         db.query(AdaptationReportORM)
         .filter_by(newcomer_id=newcomer_id)
