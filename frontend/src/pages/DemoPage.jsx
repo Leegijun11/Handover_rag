@@ -10,7 +10,7 @@ import Button from "../components/common/Button";
  * 새 API 없이 POST /user/login을 그대로 재사용한다. 실제 사용자 계정이 아니라
  * 공개해도 무방한 값이라 프론트에 하드코딩한다.
  *
- * 주의: backend/scripts/seed_demo.py(팀원 A·B가 2곳씩 분담, 조장 조율)가 만드는 계정과
+ * 주의: backend/scripts/seed_demo.py(팀원 B 전담)가 만드는 계정과
  * 이메일·비밀번호가 정확히 같아야 한다. user_id도 고정값(demo-mentor-a/-b/-c/-d,
  * demo-newcomer-a/-b/-c/-d)으로 시딩되어야 .env의 DEMO_USER_IDS(rate limit 예외)와 맞는다.
  * 각 회사의 사수 계정은 이 신입 1명 외에도 신입 1~2명을 추가로 담당하도록 시딩된다
