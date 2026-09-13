@@ -5,6 +5,7 @@ import { formatDate, formatDateTime, parseServerDate, toServerDate } from "../..
 import { getChapters } from "../../services/router/document";
 import { generateReport, getReportHistory } from "../../services/router/report";
 import NewcomerPicker from "../../components/hr/NewcomerPicker";
+import { DonutChart, RadarChart } from "../../components/hr/ReportCharts";
 import Button from "../../components/common/Button";
 
 /**
@@ -49,52 +50,33 @@ function sortSections(sections) {
   );
 }
 
-/**
- * 값이 가장 큰 항목이 100%가 되는 가로 막대.
- *
- * 라벨을 막대 왼쪽에 두지 않고 위에 올린 이유: 업무 제목이 길이가 제각각이라
- * 옆에 두면 좁은 고정폭에서 잘리거나, 어떤 줄만 두 줄이 되어 높이가 들쭉날쭉해진다.
- * 위에 올리면 제목이 카드 폭을 다 쓰고 모든 줄의 구조가 같아진다.
- */
-function Bars({ entries }) {
-  const max = entries.reduce((m, [, value]) => Math.max(m, value), 0);
-  if (!entries.length || max === 0) {
-    return <div className="empty" style={{ padding: 20 }}>기간 내 기록 없음</div>;
-  }
-  return (
-    <div className="bars">
-      {entries.map(([label, value]) => (
-        <div className="bar-row" key={label}>
-          <div className="bar-head">
-            <span className="bar-label" title={label}>{label}</span>
-            <span className="num">{value}</span>
-          </div>
-          <span className="bar">
-            <i style={{ width: `${Math.round((value / max) * 100)}%` }} />
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SignalBody({ section, chapterTitleOf }) {
+function SignalBody({ section, previousSection, chapterTitleOf }) {
   const data = section.data || {};
 
   if (section.signal_type === "growth_curve") {
     const counts = data.counts || {};
-    const entries = Object.keys(QUESTION_TYPE_LABEL)
-      .filter((key) => counts[key] !== undefined)
-      .map((key) => [QUESTION_TYPE_LABEL[key], counts[key]]);
-    return <Bars entries={entries} />;
+    const previousCounts = previousSection?.data?.counts;
+    // 값이 전부 0이면 축척을 잡을 수 없어 점 하나로 뭉개진다 — 그냥 빈 상태로 둔다.
+    const filled = Object.values(counts).some((n) => n > 0);
+    if (!filled) {
+      return <div className="empty" style={{ padding: 20 }}>기간 내 질문 없음</div>;
+    }
+    // 4개 유형을 항상 같은 순서로 그린다 — 리포트마다 축이 돌아가면 비교가 안 된다.
+    const axes = Object.entries(QUESTION_TYPE_LABEL).map(([key, label]) => ({
+      label,
+      value: counts[key] || 0,
+      previous: previousCounts ? previousCounts[key] || 0 : undefined,
+    }));
+    return <RadarChart axes={axes} />;
   }
 
   if (section.signal_type === "chapter_heatmap") {
     const counts = data.counts || {};
-    const entries = Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([chapterId, value]) => [chapterTitleOf(chapterId), value]);
-    return <Bars entries={entries} />;
+    const entries = Object.entries(counts).map(([chapterId, value]) => ({
+      label: chapterTitleOf(chapterId),
+      value,
+    }));
+    return <DonutChart entries={entries} />;
   }
 
   if (section.signal_type === "gap_task") {
@@ -146,9 +128,53 @@ function SignalBody({ section, chapterTitleOf }) {
   );
 }
 
+/**
+ * 상세 맨 위의 한 줄 요약.
+ *
+ * 신호 카드 4개를 다 읽기 전에 "지금 이 신입은 어떤 상태인가"가 먼저 보여야 한다.
+ * 숫자는 전부 아래 카드에서 다시 확인할 수 있는 값들이고, 여기서는 훑어보는 용도다.
+ */
+function ReportSummary({ sections, chapterTitleOf }) {
+  const find = (type) => sections.find((s) => s.signal_type === type)?.data || {};
+  const growth = find("growth_curve");
+  const heatmap = find("chapter_heatmap");
+  const gap = find("gap_task");
+  const silence = find("silence_risk");
+
+  const topChapter = Object.entries(heatmap.counts || {}).sort((a, b) => b[1] - a[1])[0];
+  const gapCount = (gap.gap_items || []).length;
+  const dropped = silence.dropped_sharply;
+
+  return (
+    <div className="report-summary">
+      <div className="tile">
+        <span className="n">{growth.total ?? 0}</span>
+        <span className="k">기간 내 질문</span>
+      </div>
+      <div className="tile">
+        <span className="n name" title={topChapter ? chapterTitleOf(topChapter[0]) : ""}>
+          {topChapter ? chapterTitleOf(topChapter[0]) : "—"}
+        </span>
+        <span className="k">가장 많이 물은 업무</span>
+      </div>
+      <div className={`tile${gapCount > 0 ? " warn" : ""}`}>
+        <span className="n">{gapCount}</span>
+        <span className="k">완료했는데 다시 묻는 항목</span>
+      </div>
+      <div className={`tile${dropped ? " warn" : ""}`}>
+        <span className="n">{dropped ? "급감" : "정상"}</span>
+        <span className="k">질문 추이</span>
+      </div>
+    </div>
+  );
+}
+
 /** 리포트 상세 — 4개 신호 카드. 목록에서 고른 리포트 하나를 그대로 보여준다. */
-function ReportDetail({ report, chapterTitleOf, onBack }) {
+function ReportDetail({ report, previousReport, chapterTitleOf, onBack }) {
   const sections = sortSections(report.sections);
+  // 지난 리포트의 같은 신호 — 성장 곡선에 점선으로 겹쳐 그린다.
+  const previousOf = (type) =>
+    (previousReport?.sections || []).find((s) => s.signal_type === type);
   return (
     <>
       <div className="report-head">
@@ -163,13 +189,20 @@ function ReportDetail({ report, chapterTitleOf, onBack }) {
         </div>
       </div>
 
+      <ReportSummary sections={sections} chapterTitleOf={chapterTitleOf} />
+
       <div className="signal-grid">
         {sections.map((section) => (
           <div className="card signal" key={section.signal_type}>
             <h4>{SIGNAL_TITLE[section.signal_type] || section.signal_type}</h4>
             <div className="sig-key">{section.signal_type}</div>
+            <SignalBody
+              section={section}
+              previousSection={previousOf(section.signal_type)}
+              chapterTitleOf={chapterTitleOf}
+            />
+            {/* 해석 문구를 차트 아래에 둔다 — 그림을 먼저 보고 설명을 읽는 순서가 자연스럽다 */}
             <p className="summary">{section.summary}</p>
-            <SignalBody section={section} chapterTitleOf={chapterTitleOf} />
           </div>
         ))}
       </div>
@@ -289,6 +322,10 @@ function ReportPage() {
           {selectedReport ? (
             <ReportDetail
               report={selectedReport}
+              // history는 생성 시각 역순이라 바로 다음 항목이 직전 리포트다.
+              previousReport={
+                history[history.findIndex((r) => r.report_id === selectedReport.report_id) + 1]
+              }
               chapterTitleOf={chapterTitleOf}
               onBack={() => setSelectedReport(null)}
             />
