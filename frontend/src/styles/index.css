@@ -201,7 +201,7 @@ textarea { resize: vertical; min-height: 88px; line-height: 1.6; }
 .dropzone .hint { color: var(--text-faint); font-size: 12px; }
 
 /* ── 데모 회사 선택 ────────────────────────────────────────────── */
-.demo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.demo-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
 .demo-card { display: flex; flex-direction: column; }
 .demo-card h4 { margin: 0 0 2px; font-size: 15px; }
 .demo-card .demo-field { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }

@@ -10,9 +10,12 @@ import Button from "../components/common/Button";
  * 새 API 없이 POST /user/login을 그대로 재사용한다. 실제 사용자 계정이 아니라
  * 공개해도 무방한 값이라 프론트에 하드코딩한다.
  *
- * 주의: backend/scripts/seed_demo.py(조장 조율)가 만드는 계정과 이메일·비밀번호가
- * 정확히 같아야 한다. user_id도 고정값(demo-mentor-a/-b/-c, demo-newcomer-a/-b/-c)으로
- * 시딩되어야 .env의 DEMO_USER_IDS(rate limit 예외)와 맞는다.
+ * 주의: backend/scripts/seed_demo.py(팀원 A·B가 2곳씩 분담, 조장 조율)가 만드는 계정과
+ * 이메일·비밀번호가 정확히 같아야 한다. user_id도 고정값(demo-mentor-a/-b/-c/-d,
+ * demo-newcomer-a/-b/-c/-d)으로 시딩되어야 .env의 DEMO_USER_IDS(rate limit 예외)와 맞는다.
+ * 각 회사의 사수 계정은 이 신입 1명 외에도 신입 1~2명을 추가로 담당하도록 시딩된다
+ * (사수 화면에서 "여러 신입 담당" 구조가 보이게 하기 위함, guidelines 1-8/6-6) — 그
+ * 추가 신입들은 여기서 직접 로그인하지 않으므로 고정 id가 필요 없다.
  */
 const DEMO_PASSWORD = "demo-handover-2026";
 
@@ -43,6 +46,15 @@ const COMPANIES = [
       "배포 절차와 온콜 대응. 질문이 후반부에 끊긴 침묵 위험 사례를 볼 수 있습니다.",
     mentorEmail: "demo-mentor-c@handover.demo",
     newcomerEmail: "demo-newcomer-c@handover.demo",
+  },
+  {
+    id: "d",
+    name: "그린푸드",
+    field: "인사 · 채용/노무",
+    summary:
+      "채용부터 급여·평가까지의 인사 업무 인수인계서. 질문이 단순 확인에서 절차·판단으로 점점 깊어지는 성장 곡선 사례를 볼 수 있습니다.",
+    mentorEmail: "demo-mentor-d@handover.demo",
+    newcomerEmail: "demo-newcomer-d@handover.demo",
   },
 ];
 
