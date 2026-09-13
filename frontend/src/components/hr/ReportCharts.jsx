@@ -26,7 +26,8 @@ const BASELINE = "#949ca6"; // 지난 리포트(기준선) — 계열색이 아�
    질문 유형 4축의 프로필을 한눈에 본다. 지난 리포트를 점선으로 겹쳐 그려서
    "무엇이 늘고 무엇이 줄었는지"가 카드 하나에서 읽히게 한다. */
 
-const RADAR = { w: 300, h: 236, cx: 150, cy: 116, r: 74, labelR: 102 };
+// 5축(오각형)까지 라벨이 뷰박스 안에 들어가도록 잡은 크기. 축 수나 라벨을 바꾸면 기하를 다시 확인할 것.
+const RADAR = { w: 360, h: 256, cx: 180, cy: 132, r: 80, labelR: 104 };
 
 function pointAt(index, count, ratio) {
   const angle = (-90 + (360 / count) * index) * (Math.PI / 180);
@@ -46,7 +47,7 @@ function labelAt(index, count) {
   return { x, y, anchor };
 }
 
-export function RadarChart({ axes, previousLabel }) {
+export function RadarChart({ axes, previousLabel, max: fixedMax, unit = "건" }) {
   const count = axes.length;
   const hasPrevious = axes.some((a) => a.previous !== undefined && a.previous !== null);
 
@@ -55,7 +56,8 @@ export function RadarChart({ axes, previousLabel }) {
     (m, a) => Math.max(m, a.value || 0, hasPrevious ? a.previous || 0 : 0),
     0,
   );
-  const max = Math.max(1, peak);
+  // 점수처럼 척도가 정해진 값은 고정 최대값을 쓴다 — 데이터에 따라 축척이 바뀌면 모양 비교가 거짓이 된다.
+  const max = fixedMax || Math.max(1, peak);
 
   const toPath = (pick) =>
     axes
@@ -66,8 +68,8 @@ export function RadarChart({ axes, previousLabel }) {
       .join(" ") + " Z";
 
   return (
-    <div className="chart">
-      <svg viewBox={`0 0 ${RADAR.w} ${RADAR.h}`} role="img" aria-label="질문 유형 분포">
+    <div className="chart chart-radar">
+      <svg viewBox={`0 0 ${RADAR.w} ${RADAR.h}`} role="img" aria-label="지표별 점수">
         {/* 눈금 고리 — 가장 바깥이 최대값이다 */}
         {[0.25, 0.5, 0.75, 1].map((ratio) => (
           <polygon
@@ -125,7 +127,7 @@ export function RadarChart({ axes, previousLabel }) {
               stroke="#fff"
               strokeWidth="2"
             >
-              <title>{`${axis.label} ${axis.value || 0}건`}</title>
+              <title>{`${axis.label} ${axis.value || 0}${unit}`}</title>
             </circle>
           );
         })}
@@ -162,7 +164,7 @@ export function RadarChart({ axes, previousLabel }) {
             {previousLabel || "지난 리포트"}
           </span>
         )}
-        <span className="chart-scale">바깥 고리 = {max}건</span>
+        <span className="chart-scale">바깥 고리 = {max}{unit}</span>
       </div>
     </div>
   );

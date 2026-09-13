@@ -486,24 +486,114 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
 /* 라벨을 막대 위에 올려서 모든 줄이 같은 높이·같은 구조를 갖게 한다.
    업무 제목 길이가 제각각이라 옆에 두면 어떤 줄만 두 줄이 되어 지저분해진다. */
 /* ── 리포트 차트 ───────────────────────────────────────────────── */
-/* 상세 맨 위 요약 타일 — 카드 4개를 읽기 전에 상태부터 훑게 한다 */
-.report-summary {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
-  background: var(--border); border: 1px solid var(--border);
-  border-radius: var(--radius); overflow: hidden; margin-bottom: 16px;
+/* ── 리포트 상세 (문서형) ─────────────────────────────────────────
+   인사 리포트 문서처럼 읽히게 한다: 카드를 여러 겹 쌓지 않고 흰 지면 한 장 위에
+   얇은 구분선으로 섹션을 나눈다. 강조색은 파랑 하나, 상태색(좋음/주의)은 문구와 함께만 쓴다. */
+.rpt {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 22px 28px 26px; margin-top: 4px;
 }
-.report-summary .tile { background: var(--surface); padding: 14px 16px; min-width: 0; }
-.report-summary .n {
-  display: block; font-size: 22px; font-weight: 700; letter-spacing: -.02em;
-  font-variant-numeric: tabular-nums; line-height: 1.3;
+.rpt .link-back { margin-bottom: 14px; }
+.rpt .muted { color: var(--text-faint); }
+
+.rpt-head { padding-bottom: 18px; border-bottom: 2px solid var(--text); }
+.rpt-kicker {
+  margin: 0; font-size: 11.5px; font-weight: 700; letter-spacing: .08em; color: var(--accent);
 }
-/* 업무 제목이 들어가는 칸은 숫자보다 작게 — 한 줄로 자른다 */
-.report-summary .n.name {
-  font-size: 14px; font-weight: 650; white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis;
+.rpt-title { margin: 4px 0 14px; font-size: 24px; font-weight: 700; letter-spacing: -.02em; }
+.rpt-meta {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 20px; margin: 0;
 }
-.report-summary .k { display: block; font-size: 12px; color: var(--text-muted); margin-top: 3px; }
-.report-summary .tile.warn .n { color: var(--warn); }
+.rpt-meta dt { font-size: 11.5px; color: var(--text-faint); }
+.rpt-meta dd {
+  margin: 2px 0 0; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.rpt-sec { padding: 22px 0 4px; }
+.rpt-sec + .rpt-sec { border-top: 1px solid var(--border); }
+.rpt-sec-title {
+  display: flex; align-items: baseline; gap: 10px; margin: 0 0 14px;
+  font-size: 15px; font-weight: 700; letter-spacing: -.01em;
+}
+.rpt-sec-title span {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px; color: var(--accent); font-weight: 700;
+}
+
+/* 요약: 왼쪽 종합 점수와 핵심 발견, 오른쪽 오각형 */
+.rpt-overview {
+  /* 두 번째 열을 minmax(0, 380px)로 두면 크롬이 내용(범례) 폭만큼만 잡아 차트가 작아진다 — 비율로 나눈다 */
+  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 28px; align-items: center;
+}
+.rpt-score-label { margin: 0; font-size: 12.5px; color: var(--text-muted); font-weight: 600; }
+.rpt-score-value {
+  margin: 2px 0 0; font-size: 56px; line-height: 1.05; font-weight: 800;
+  letter-spacing: -.03em; font-variant-numeric: tabular-nums;
+}
+.rpt-score-value small { font-size: 16px; font-weight: 600; color: var(--text-faint); margin-left: 6px; letter-spacing: 0; }
+.rpt-score-delta { display: flex; align-items: center; gap: 8px; margin: 8px 0 18px; font-size: 13px; }
+
+.delta { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.delta.up { color: var(--success); }
+.delta.down { color: var(--danger); }
+.delta.flat, .delta.none { color: var(--text-faint); font-weight: 500; }
+
+.rpt-findings { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
+.rpt-findings li {
+  display: grid; grid-template-columns: 64px 1fr; gap: 10px; align-items: baseline;
+  padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+}
+.rpt-findings b { font-size: 11.5px; font-weight: 700; }
+.rpt-findings li.good b { color: var(--success); }
+.rpt-findings li.warn b { color: var(--warn); }
+.rpt-findings li.neutral b { color: var(--text-faint); }
+.rpt-findings em { font-style: normal; font-weight: 700; margin-right: 6px; }
+
+/* flex 안에서 차트가 내용 폭으로 줄어들면 SVG가 같이 작아져 글자가 안 읽힌다 — 폭을 채우게 한다 */
+.rpt-radar { display: flex; justify-content: center; }
+.rpt-radar .chart { width: 100%; }
+.rpt-radar .chart-radar svg { max-width: 400px; }
+
+/* 표 */
+.rpt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rpt-table th {
+  text-align: left; font-size: 11.5px; font-weight: 600; color: var(--text-muted);
+  background: none; padding: 8px 10px; border-bottom: 1px solid var(--text);
+}
+.rpt-table td { padding: 11px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.rpt-table tbody tr:last-child td { border-bottom: none; }
+.rpt-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rpt-table .sub { font-size: 12px; color: var(--text-muted); }
+.rpt-table td .sub { margin-top: 2px; }
+.rpt-table .warn { color: var(--warn); font-weight: 700; }
+.rpt-table.compact td, .rpt-table.compact th { padding: 8px 6px; }
+.rpt-table .score-col { width: 34%; }
+.score-bar { display: flex; align-items: center; gap: 10px; }
+.score-bar .bar { flex: 1; height: 8px; }
+.score-bar .bar i.low { background: var(--warn); }
+.score-num { min-width: 28px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* 근거 데이터: 선으로 나눈 2열 격자 */
+.rpt-evidence {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--border); border-left: 1px solid var(--border);
+}
+.rpt-card {
+  padding: 16px 18px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+.rpt-card h6 { margin: 0 0 12px; font-size: 13.5px; font-weight: 700; }
+.rpt-card-note { margin: 12px 0 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.65; }
+.rpt-card .stat .n.warn { color: var(--warn); }
+.rpt-card .stat .n.good { color: var(--success); }
+.bar-prev { font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+.rpt-foot {
+  margin-top: 20px; padding: 12px 14px; background: var(--surface-2);
+  border-radius: var(--radius); font-size: 12px; line-height: 1.7; color: var(--text-muted);
+}
+.rpt-foot b { color: var(--text); margin-right: 6px; }
 
 .chart { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 /* viewBox 기준으로 글자까지 함께 커지므로 폭을 묶어둔다 — 넓은 카드에서 레이더 라벨이 과하게 커진다 */
@@ -561,7 +651,10 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
   .row-2 { grid-template-columns: 1fr; }
   .demo-grid { grid-template-columns: 1fr; }
   .signal-grid { grid-template-columns: 1fr; }
-  .report-summary { grid-template-columns: repeat(2, 1fr); }
+  .rpt { padding: 18px 16px 20px; }
+  .rpt-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rpt-overview { grid-template-columns: 1fr; }
+  .rpt-evidence { grid-template-columns: 1fr; }
   /* 좁은 화면에서는 도넛 범례를 아래로 내린다 */
   .chart-donut { flex-direction: column; align-items: center; }
   .chart-legend-list { width: 100%; }
@@ -577,3 +670,8 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
   /* 셸이 세로로 쌓이면 헤더 56px + 메뉴 높이만큼 더 빠진다 */
   .chat { height: calc(100vh - 110px); }
 }
+
+.rpt-score { min-width: 0; }
+/* 좁은 화면에서 표만 가로로 스크롤되게 한다 — 페이지 전체가 옆으로 밀리지 않게 */
+.table-scroll { overflow-x: auto; }
+.table-scroll .rpt-table { min-width: 560px; }
