@@ -268,3 +268,97 @@ export function DonutChart({ entries, unit = "건" }) {
     </div>
   );
 }
+
+/* ── 날짜별 질문 흐름 ─────────────────────────────────────────────
+   "질문이 끊겼는가"는 앞/뒤 절반 합계 두 숫자보다 날짜별 막대로 봐야 읽힌다.
+   기간 중간에 점선을 그어서 서버가 급감 여부를 판단하는 기준선을 같이 보여준다. */
+
+const TL = { w: 640, h: 170, left: 30, right: 10, top: 14, bottom: 26 };
+const DAY = 86400000;
+
+function localMidnight(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+export function QuestionTimeline({ times, start, end, dropped }) {
+  if (!start || !end) return null;
+
+  const firstDay = localMidnight(start);
+  const days = Math.max(1, Math.round((localMidnight(end) - firstDay) / DAY) + 1);
+  // 기간이 한 달을 넘으면 막대가 가늘어져 읽히지 않으므로 주 단위로 묶는다.
+  const step = days > 31 ? 7 : 1;
+  const buckets = Math.ceil(days / step);
+  const counts = new Array(buckets).fill(0);
+  times.forEach((t) => {
+    const index = Math.floor((localMidnight(t) - firstDay) / DAY / step);
+    if (index >= 0 && index < buckets) counts[index] += 1;
+  });
+
+  const plotW = TL.w - TL.left - TL.right;
+  const plotH = TL.h - TL.top - TL.bottom;
+  const slot = plotW / buckets;
+  const barW = Math.max(3, Math.min(28, slot - 4));
+  const max = Math.max(1, ...counts);
+  const baseY = TL.top + plotH;
+
+  const mid = new Date((start.getTime() + end.getTime()) / 2);
+  const midX = TL.left + ((mid - firstDay) / (buckets * step * DAY)) * plotW;
+  const md = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
+  const bucketDate = (i) => new Date(firstDay.getTime() + i * step * DAY);
+
+  return (
+    <div className="timeline">
+      <svg viewBox={`0 0 ${TL.w} ${TL.h}`} role="img" aria-label="날짜별 질문 수">
+        <line x1={TL.left} x2={TL.w - TL.right} y1={TL.top} y2={TL.top} stroke={GRID} strokeWidth="1" />
+        <line x1={TL.left} x2={TL.w - TL.right} y1={baseY} y2={baseY} stroke="#cdd3da" strokeWidth="1" />
+        <text x={TL.left - 6} y={TL.top} textAnchor="end" dominantBaseline="middle" className="chart-axis">
+          {max}
+        </text>
+        <text x={TL.left - 6} y={baseY} textAnchor="end" dominantBaseline="middle" className="chart-axis">
+          0
+        </text>
+
+        {counts.map((count, i) => {
+          if (!count) return null;
+          const h = Math.max(2, (count / max) * plotH);
+          const x = TL.left + slot * i + (slot - barW) / 2;
+          const afterMid = x + barW / 2 > midX;
+          return (
+            <rect
+              key={i}
+              x={x.toFixed(1)}
+              y={(baseY - h).toFixed(1)}
+              width={barW.toFixed(1)}
+              height={h.toFixed(1)}
+              rx="3"
+              fill={afterMid && dropped ? CHART_COLORS[3] : CHART_COLORS[0]}
+            >
+              <title>{`${md(bucketDate(i))}${step > 1 ? " 주" : ""} 질문 ${count}건`}</title>
+            </rect>
+          );
+        })}
+
+        <line
+          x1={midX.toFixed(1)}
+          x2={midX.toFixed(1)}
+          y1={TL.top - 4}
+          y2={baseY}
+          stroke={BASELINE}
+          strokeWidth="1.5"
+          strokeDasharray="4 3"
+        />
+        <text x={midX.toFixed(1)} y={TL.h - 6} textAnchor="middle" className="chart-axis">
+          중간 {md(mid)}
+        </text>
+        <text x={TL.left} y={TL.h - 6} textAnchor="start" className="chart-axis">
+          {md(start)}
+        </text>
+        <text x={TL.w - TL.right} y={TL.h - 6} textAnchor="end" className="chart-axis">
+          {md(end)}
+        </text>
+      </svg>
+    </div>
+  );
+}

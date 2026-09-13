@@ -5,9 +5,18 @@ import { formatDate, formatDateTime, parseServerDate, toServerDate } from "../..
 import { getChapters, listMyDocuments } from "../../services/router/document";
 import { getChecklist } from "../../services/router/checklist";
 import { SCORE_AXES, computeAdaptationScore } from "../../api/adaptationScore";
+import {
+  buildActions,
+  buildHeadline,
+  pickStrength,
+  splitChecklist,
+  statusOf,
+  untouchedChapters,
+} from "../../api/reportInsights";
+import { getChatLogs } from "../../services/router/chat";
 import { generateReport, getReportHistory } from "../../services/router/report";
 import NewcomerPicker from "../../components/hr/NewcomerPicker";
-import { DonutChart, RadarChart } from "../../components/hr/ReportCharts";
+import { DonutChart, QuestionTimeline, RadarChart } from "../../components/hr/ReportCharts";
 import Button from "../../components/common/Button";
 
 /**
@@ -22,19 +31,9 @@ import Button from "../../components/common/Button";
  * 내려주므로(report.py), 최신 리포트도 이 목록의 첫 번째 항목으로 취급하고 별도
  * GET /report/{newcomer_id}는 부르지 않는다 — 같은 데이터를 두 번 받을 이유가 없다.
  *
- * 서버는 sections의 순서를 보장하지 않는다(관계에 정렬 기준이 없어서 DB가 주는 대로 온다).
- * 리포트를 다시 만들 때마다 카드 위치가 바뀌면 지난 리포트와 비교할 수 없으므로
- * 아래 SIGNAL_ORDER로 프론트에서 고정한다.
+ * 서버는 sections의 순서를 보장하지 않는다. 상세 화면은 신호를 순서대로 나열하지 않고
+ * SCORE_AXES의 지표 순서대로 그리므로 서버 순서에 영향을 받지 않는다.
  */
-
-const SIGNAL_ORDER = ["growth_curve", "chapter_heatmap", "gap_task", "silence_risk"];
-
-const SIGNAL_TITLE = {
-  growth_curve: "질문 성장 곡선",
-  chapter_heatmap: "영역별 히트맵",
-  gap_task: "완료–이해 불일치",
-  silence_risk: "침묵 위험",
-};
 
 const QUESTION_TYPE_LABEL = {
   fact: "사실 확인",
@@ -46,13 +45,7 @@ const QUESTION_TYPE_LABEL = {
 // report.py의 MIN_REGENERATE_INTERVAL과 같은 값. 이 시간 안에 다시 부르면 서버가 429를 준다.
 const REGENERATE_LOCK_MS = 5 * 60 * 1000;
 
-function sortSections(sections) {
-  return [...(sections || [])].sort(
-    (a, b) => SIGNAL_ORDER.indexOf(a.signal_type) - SIGNAL_ORDER.indexOf(b.signal_type),
-  );
-}
-
-/** 질문 유형 4개를 가로 막대로. 지난 리포트 값은 숫자로만 곁들인다. */
+/** 질문 유형 4개를 가로 막대로. 지난 리포트 값은 괄호로 곁들인다. */
 function TypeBars({ counts, previousCounts }) {
   const entries = Object.entries(QUESTION_TYPE_LABEL).map(([key, label]) => ({
     label,
@@ -61,7 +54,7 @@ function TypeBars({ counts, previousCounts }) {
   }));
   const max = entries.reduce((m, e) => Math.max(m, e.value), 0);
   if (max === 0) {
-    return <div className="empty" style={{ padding: 20 }}>기간 내 질문 없음</div>;
+    return <div className="empty" style={{ padding: 16 }}>기간 내 질문 없음</div>;
   }
   return (
     <div className="bars">
@@ -69,104 +62,14 @@ function TypeBars({ counts, previousCounts }) {
         <div className="bar-row" key={e.label}>
           <div className="bar-head">
             <span className="bar-label">{e.label}</span>
-            {e.previous !== null && <span className="bar-prev">지난 {e.previous}</span>}
-            <span className="num">{e.value}건</span>
+            <span className="num">
+              {e.value}건
+              {e.previous !== null && <span className="bar-prev"> (지난 리포트 {e.previous}건)</span>}
+            </span>
           </div>
           <span className="bar">
             <i style={{ width: `${Math.round((e.value / max) * 100)}%` }} />
           </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SignalBody({ section, previousSection, chapterTitleOf, report }) {
-  const data = section.data || {};
-
-  if (section.signal_type === "growth_curve") {
-    return (
-      <TypeBars counts={data.counts || {}} previousCounts={previousSection?.data?.counts} />
-    );
-  }
-
-  if (section.signal_type === "chapter_heatmap") {
-    const counts = data.counts || {};
-    const entries = Object.entries(counts).map(([chapterId, value]) => ({
-      label: chapterTitleOf(chapterId),
-      value,
-    }));
-    return <DonutChart entries={entries} />;
-  }
-
-  if (section.signal_type === "gap_task") {
-    const gaps = data.gap_items || [];
-    if (!gaps.length) {
-      return <div className="empty" style={{ padding: 20 }}>불일치가 감지된 항목 없음</div>;
-    }
-    return (
-      <table className="rpt-table compact">
-        <thead>
-          <tr>
-            <th>완료 체크한 항목</th>
-            <th className="num">이후 질문</th>
-          </tr>
-        </thead>
-        <tbody>
-          {gaps.map((gap, index) => (
-            <tr key={`${gap.title}-${index}`}>
-              <td>{gap.title}</td>
-              <td className="num warn">{gap.question_count_after_complete}건</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    );
-  }
-
-  // silence_risk는 데이터 모양이 두 가지다. 기간 내 질문이 하나도 없으면 전반부/후반부
-  // 숫자 없이 reason만 온다 — 그 경우를 따로 그리지 않으면 화면이 비어버린다.
-  if (data.first_half_questions === undefined) {
-    return (
-      <div className="empty" style={{ padding: 20 }}>
-        기간 내 질문이 없어 급감 여부를 계산하지 않았습니다
-      </div>
-    );
-  }
-  // "전반부/후반부"라는 말 대신 실제 날짜 구간을 보여준다. 중간 시점은 report.py와 같은
-  // 방식(기간 시작 + 기간 길이의 절반)으로 계산한다.
-  const start = parseServerDate(report?.period_start);
-  const end = parseServerDate(report?.period_end);
-  const mid = start && end ? new Date((start.getTime() + end.getTime()) / 2) : null;
-  const md = (d) => (d ? `${d.getMonth() + 1}/${d.getDate()}` : "-");
-  const first = data.first_half_questions;
-  const second = data.second_half_questions;
-  const peak = Math.max(first, second, 1);
-  const rows = [
-    { key: "first", label: "기간 앞쪽 절반", range: `${md(start)} ~ ${md(mid)}`, value: first },
-    { key: "second", label: "기간 뒤쪽 절반", range: `${md(mid)} ~ ${md(end)}`, value: second },
-  ];
-  return (
-    <div className="flow">
-      <div className="flow-verdict">
-        <span className={`chip ${data.dropped_sharply ? "chip-warn" : "chip-good"}`}>
-          {data.dropped_sharply ? "질문 급감" : "정상"}
-        </span>
-        <span className="flow-rule">뒤쪽 절반 질문이 앞쪽의 30% 이하로 줄면 급감으로 봅니다</span>
-      </div>
-      {rows.map((row) => (
-        <div className="flow-row" key={row.key}>
-          <div className="flow-label">
-            <b>{row.label}</b>
-            <span>{row.range}</span>
-          </div>
-          <span className="bar">
-            <i
-              className={row.key === "second" && data.dropped_sharply ? "low" : undefined}
-              style={{ width: `${Math.round((row.value / peak) * 100)}%` }}
-            />
-          </span>
-          <span className="flow-num">{row.value}건</span>
         </div>
       ))}
     </div>
@@ -184,59 +87,159 @@ function Delta({ value }) {
   );
 }
 
-/**
- * 규칙으로 뽑는 핵심 발견. 가장 높은 지표 하나를 강점으로, 60점 미만인 지표를 낮은 순으로
- * 최대 두 개까지 확인 필요로 둔다. LLM을 부르지 않으므로 기준이 늘 같다.
- */
-function findingsOf(axes) {
-  const scored = SCORE_AXES.map((axis) => ({ ...axis, score: axes[axis.key] })).filter(
-    (a) => a.score !== null,
+const STATUS_LABEL = { good: "양호", concern: "주의", none: "데이터 부족" };
+
+/** 지표 하나의 근거 — 지표와 신호를 1:1로 묶어서 같은 사실을 두 번 보여주지 않는다. */
+function MetricEvidence({ axisKey, report, previousReport, chapters, checklist, chatTimes, chapterTitleOf }) {
+  const data = Object.fromEntries((report.sections || []).map((s) => [s.signal_type, s.data || {}]));
+
+  if (axisKey === "depth") {
+    const prev = (previousReport?.sections || []).find((s) => s.signal_type === "growth_curve");
+    return <TypeBars counts={data.growth_curve?.counts || {}} previousCounts={prev?.data?.counts} />;
+  }
+
+  if (axisKey === "coverage") {
+    const counts = data.chapter_heatmap?.counts || {};
+    const entries = Object.entries(counts).map(([id, value]) => ({ label: chapterTitleOf(id), value }));
+    const missing = untouchedChapters(report, chapters);
+    const total = data.growth_curve?.total || 0;
+    const linked = entries.reduce((sum, e) => sum + e.value, 0);
+    return (
+      <>
+        <DonutChart entries={entries} />
+        {total > linked && (
+          <p className="evidence-note">
+            답을 찾지 못해 업무에 연결되지 않은 질문 {total - linked}건은 비중에서 제외했습니다.
+          </p>
+        )}
+        {missing.length > 0 && (
+          <p className="evidence-note">
+            <b>아직 질문하지 않은 업무</b> {missing.map((c) => c.title).join(" · ")}
+          </p>
+        )}
+      </>
+    );
+  }
+
+  if (axisKey === "alignment") {
+    const gaps = data.gap_task?.gap_items || [];
+    if (!gaps.length) {
+      return <div className="empty" style={{ padding: 16 }}>완료 후 다시 물은 항목 없음</div>;
+    }
+    return (
+      <table className="rpt-table">
+        <thead>
+          <tr>
+            <th>완료 체크한 항목</th>
+            <th className="num">완료 후 질문</th>
+          </tr>
+        </thead>
+        <tbody>
+          {gaps.map((gap, index) => (
+            <tr key={`${gap.title}-${index}`}>
+              <td>{gap.title}</td>
+              <td className={`num ${gap.question_count_after_complete >= 2 ? "warn" : ""}`}>
+                {gap.question_count_after_complete}건
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
+  if (axisKey === "continuity") {
+    const silence = data.silence_risk || {};
+    const start = parseServerDate(report.period_start);
+    const end = parseServerDate(report.period_end);
+    if (silence.first_half_questions === undefined) {
+      return <div className="empty" style={{ padding: 16 }}>기간 내 질문 없음</div>;
+    }
+    return (
+      <>
+        <QuestionTimeline
+          times={chatTimes.filter((t) => t >= start && t <= end)}
+          start={start}
+          end={end}
+          dropped={silence.dropped_sharply}
+        />
+        <p className="evidence-note">
+          점선 앞 {silence.first_half_questions}건 · 뒤 {silence.second_half_questions}건 — 뒤쪽이
+          앞쪽의 30% 이하로 줄면 급감으로 봅니다.
+        </p>
+      </>
+    );
+  }
+
+  // progress
+  const { done, pending } = splitChecklist(report, checklist);
+  if (!done.length && !pending.length) {
+    return <div className="empty" style={{ padding: 16 }}>체크리스트 없음</div>;
+  }
+  return (
+    <ul className="progress-list">
+      {done.map((item) => (
+        <li key={item.item_id} className="done">
+          <span className="mark" aria-label="완료">✓</span>
+          <span className="title">{item.title}</span>
+          <span className="when">{item.doneLabel}</span>
+        </li>
+      ))}
+      {pending.map((item) => (
+        <li key={item.item_id}>
+          <span className="mark" aria-label="미완료" />
+          <span className="title">{item.title}</span>
+          <span className="when">미완료</span>
+        </li>
+      ))}
+    </ul>
   );
-  const best = [...scored].sort((a, b) => b.score - a.score)[0];
-  const weak = scored
-    .filter((a) => a.score < 60)
-    .sort((a, b) => a.score - b.score)
-    .slice(0, 2);
-  return { best: best && best.score >= 60 ? best : null, weak };
 }
 
+// 지표 → 그 지표의 근거가 되는 서버 신호(해석 문장은 서버가 신호 단위로 만든다)
+const SIGNAL_OF_AXIS = {
+  depth: "growth_curve",
+  coverage: "chapter_heatmap",
+  alignment: "gap_task",
+  continuity: "silence_risk",
+};
+
 /**
- * 리포트 상세 — 문서형 구성.
+ * 리포트 상세.
  *
- * 인사 리포트에서 흔히 쓰는 순서를 따른다: 표제(누구의, 어느 기간) → 요약(종합 점수와
- * 핵심 발견) → 지표별 점수 → 근거 데이터 → 산정 기준. 결론을 먼저 보고, 필요할 때만
- * 아래로 내려가 근거를 확인하게 한다.
+ * 구성: 표제 → 요약(한 줄 판정·종합 점수·권장 조치·오각형) → 지표별 분석 → 산정 기준.
+ * 예전엔 같은 사실을 오각형·요약 문장·점수 표·근거 카드로 네 번 보여줬다. 지금은 지표 하나를
+ * 한 블록에서 점수·근거·해석까지 한 번만 보여준다.
  */
 function ReportDetail({
   report,
   previousReport,
   chapters,
   checklist,
+  chatTimes,
+  assignedAt,
   newcomerName,
   mentorName,
   documentLabel,
   chapterTitleOf,
   onBack,
 }) {
-  const sections = sortSections(report.sections);
-  const previousOf = (type) =>
-    (previousReport?.sections || []).find((s) => s.signal_type === type);
-
   const current = computeAdaptationScore(report, chapters, checklist);
-  const previous = previousReport
-    ? computeAdaptationScore(previousReport, chapters, checklist)
-    : null;
+  const previous = previousReport ? computeAdaptationScore(previousReport, chapters, checklist) : null;
   const totalDelta =
-    previous && previous.total !== null && current.total !== null
-      ? current.total - previous.total
-      : null;
-  const { best, weak } = findingsOf(current.axes);
+    previous && previous.total !== null && current.total !== null ? current.total - previous.total : null;
+
+  const actions = buildActions({ report, score: current, chapters, checklist, assignedAt });
+  const strength = pickStrength(current);
+  const headline = buildHeadline(current, actions);
 
   const radarAxes = SCORE_AXES.map((axis) => ({
     label: axis.label,
     value: current.axes[axis.key] ?? 0,
     previous: previous ? previous.axes[axis.key] ?? 0 : undefined,
   }));
+  const summaryOf = (axisKey) =>
+    (report.sections || []).find((s) => s.signal_type === SIGNAL_OF_AXIS[axisKey])?.summary;
 
   return (
     <article className="rpt">
@@ -245,7 +248,9 @@ function ReportDetail({
       </button>
 
       <header className="rpt-head">
-        <p className="rpt-kicker">신입 적응도 리포트</p>
+        <p className="rpt-kicker">
+          신입 적응도 리포트 <span>사수 전용 · 신입에게 공개되지 않음</span>
+        </p>
         <h4 className="rpt-title">{newcomerName || "신입"}</h4>
         {/* 라벨 칸 폭을 고정한 2×2 정보 표 — 값 길이가 제각각이어도 라벨과 값의 시작선이 맞는다 */}
         <dl className="rpt-meta">
@@ -264,56 +269,48 @@ function ReportDetail({
 
       <section className="rpt-sec">
         <h5 className="rpt-sec-title">
-          <span>01</span>종합 요약
+          <span>01</span>요약
         </h5>
+
+        <p className="rpt-verdict">{headline}</p>
+
         <div className="rpt-overview">
           <div className="rpt-score">
-            <p className="rpt-score-label">종합 점수</p>
-            <p className="rpt-score-value">
-              {current.total ?? "-"}
-              <small>/ 100</small>
-            </p>
-            <p className="rpt-score-delta">
-              {previous ? (
-                <>
-                  <Delta value={totalDelta} />
-                  <span className="muted">지난 리포트 {previous.total ?? "-"}점 대비</span>
-                </>
-              ) : (
-                <span className="muted">첫 리포트 — 비교할 이전 리포트가 없습니다</span>
-              )}
-            </p>
+            <div className="rpt-score-row">
+              <p className="rpt-score-value">
+                {current.total ?? "-"}
+                <small>/ 100</small>
+              </p>
+              <div className="rpt-score-side">
+                <span className="rpt-score-label">종합 점수</span>
+                {previous ? (
+                  <span>
+                    <Delta value={totalDelta} />{" "}
+                    <span className="muted">지난 리포트 {previous.total ?? "-"}점 대비</span>
+                  </span>
+                ) : (
+                  <span className="muted">첫 리포트</span>
+                )}
+              </div>
+            </div>
 
-            <ul className="rpt-findings">
-              {best && (
-                <li className="good">
-                  <b>강점</b>
-                  <span>
-                    <em>
-                      {best.label} {best.score}점
-                    </em>
-                    {best.strength}
-                  </span>
-                </li>
+            <div className="rpt-actions">
+              <p className="rpt-actions-title">사수 권장 조치</p>
+              {actions.length ? (
+                <ol>
+                  {actions.map((action) => (
+                    <li key={action.key}>{action.text}</li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="muted">지금 따로 챙길 항목은 없습니다.</p>
               )}
-              {weak.map((axis) => (
-                <li className="warn" key={axis.key}>
-                  <b>확인 필요</b>
-                  <span>
-                    <em>
-                      {axis.label} {axis.score}점
-                    </em>
-                    {axis.concern}
-                  </span>
-                </li>
-              ))}
-              {!weak.length && (
-                <li className="neutral">
-                  <b>확인 필요</b>
-                  <span>60점 미만인 지표가 없습니다.</span>
-                </li>
+              {strength && (
+                <p className="rpt-strength">
+                  <b>잘하고 있는 점</b> {strength.strength}
+                </p>
               )}
-            </ul>
+            </div>
           </div>
 
           <div className="rpt-radar">
@@ -324,84 +321,59 @@ function ReportDetail({
 
       <section className="rpt-sec">
         <h5 className="rpt-sec-title">
-          <span>02</span>지표별 점수
+          <span>02</span>지표별 분석
         </h5>
-        <div className="table-scroll">
-          <table className="rpt-table">
-            <thead>
-              <tr>
-                <th>지표</th>
-                <th className="score-col">점수</th>
-                <th className="num">지난 대비</th>
-                <th>산정 기준</th>
-              </tr>
-            </thead>
-            <tbody>
-              {SCORE_AXES.map((axis) => {
-                const score = current.axes[axis.key];
-                const prev = previous?.axes[axis.key];
-                const delta =
-                  score !== null && prev !== null && prev !== undefined ? score - prev : null;
-                return (
-                  <tr key={axis.key}>
-                    <td>
-                      <b>{axis.label}</b>
-                      <div className="sub">{axis.meaning}</div>
-                    </td>
-                    <td className="score-col">
-                      {score === null ? (
-                        <span className="muted">데이터 없음</span>
-                      ) : (
-                        <div className="score-bar">
-                          <span className="bar">
-                            <i
-                              className={score < 60 ? "low" : undefined}
-                              style={{ width: `${score}%` }}
-                            />
-                          </span>
-                          <span className="score-num">{score}</span>
-                        </div>
-                      )}
-                      <div className="sub basis">{current.basis[axis.key]}</div>
-                    </td>
-                    <td className="num">
-                      <Delta value={previous ? delta : null} />
-                    </td>
-                    <td className="sub">{axis.formula}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
 
-      <section className="rpt-sec">
-        <h5 className="rpt-sec-title">
-          <span>03</span>근거 데이터
-        </h5>
-        <div className="rpt-evidence">
-          {sections.map((section) => (
-            <div className="rpt-card" key={section.signal_type}>
-              <h6>{SIGNAL_TITLE[section.signal_type] || section.signal_type}</h6>
-              <SignalBody
-                section={section}
-                previousSection={previousOf(section.signal_type)}
-                chapterTitleOf={chapterTitleOf}
-                report={report}
-              />
-              <p className="rpt-card-note">{section.summary}</p>
+        {SCORE_AXES.map((axis) => {
+          const value = current.axes[axis.key];
+          const prev = previous?.axes[axis.key];
+          const delta = value !== null && prev !== null && prev !== undefined ? value - prev : null;
+          const status = statusOf(value);
+          const summary = summaryOf(axis.key);
+          return (
+            <div className="metric" key={axis.key}>
+              <div className="metric-side">
+                <div className="metric-name">
+                  <b>{axis.label}</b>
+                  <span className={`chip chip-${status}`}>{STATUS_LABEL[status]}</span>
+                </div>
+                <p className="metric-score">
+                  {value ?? "-"}
+                  <small>점</small>
+                  {previous && <Delta value={delta} />}
+                </p>
+                <p className="metric-meaning">{axis.meaning}</p>
+                <p className="metric-basis">{current.basis[axis.key]}</p>
+                <p className="metric-formula">{axis.formula}</p>
+              </div>
+              <div className="metric-body">
+                <MetricEvidence
+                  axisKey={axis.key}
+                  report={report}
+                  previousReport={previousReport}
+                  chapters={chapters}
+                  checklist={checklist}
+                  chatTimes={chatTimes}
+                  chapterTitleOf={chapterTitleOf}
+                />
+                {summary && <p className="metric-summary">{summary}</p>}
+              </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
       </section>
 
-      <footer className="rpt-foot">
-        <b>산정 기준 안내</b> 지표 점수는 이 리포트의 질문 기록과 체크리스트로 계산한 0~100점이며,
-        종합 점수는 계산할 수 있는 지표의 평균입니다. 데이터가 없는 지표는 평균에서 제외합니다.
-        체크리스트에는 생성 시각이 없어 분석 기간 이후 추가된 항목도 진행도의 전체 항목 수에
-        포함됩니다. 점수는 적응 상태를 살피기 위한 참고 지표이며 평가 용도가 아닙니다.
-      </footer>
+      <details className="rpt-foot">
+        <summary>산정 기준 안내</summary>
+        <p>
+          지표 점수는 이 리포트의 질문 기록과 체크리스트로 계산한 0~100점이고, 60점 미만을 주의로
+          표시합니다. 종합 점수는 계산할 수 있는 지표의 평균이며 데이터가 없는 지표는 빠집니다.
+          배정 후 2주가 안 됐으면 질문 깊이는 권장 조치에 넣지 않습니다 — 초반엔 사실 확인 질문이
+          많은 게 정상이기 때문입니다. 체크리스트에는 생성 시각이 없어 분석 기간 이후 추가된 항목도
+          진행도의 전체 항목 수에 들어갑니다. 점수는 적응 상태를 살피기 위한 참고 지표이며 평가
+          용도가 아닙니다.
+        </p>
+      </details>
     </article>
   );
 }
@@ -415,6 +387,8 @@ function ReportPage() {
   // 점수 계산(완료 항목·진행도)과 표제부(배정 문서 이름)에 쓴다. 둘 다 조회만 한다.
   const [checklist, setChecklist] = useState([]);
   const [documents, setDocuments] = useState([]);
+  // 날짜별 질문 흐름 그래프용. 질문 본문은 쓰지 않고 시각만 뽑아둔다.
+  const [chatTimes, setChatTimes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -463,6 +437,12 @@ function ReportPage() {
     getChecklist(newcomerId)
       .then(({ data }) => !cancelled && setChecklist(data || []))
       .catch(() => !cancelled && setChecklist([]));
+    getChatLogs(newcomerId)
+      .then(({ data }) => {
+        if (cancelled) return;
+        setChatTimes((data || []).map((log) => parseServerDate(log.created_at)).filter(Boolean));
+      })
+      .catch(() => !cancelled && setChatTimes([]));
     return () => {
       cancelled = true;
     };
@@ -533,9 +513,11 @@ function ReportPage() {
 
       {assignment && (
         <>
-          <div className="banner banner-warn">
-            이 화면은 사수에게만 보입니다. 신입 화면에는 리포트가 노출되지 않습니다.
-          </div>
+          {!selectedReport && (
+            <div className="banner banner-warn">
+              이 화면은 사수에게만 보입니다. 신입 화면에는 리포트가 노출되지 않습니다.
+            </div>
+          )}
 
           {error && <div className="banner banner-error">{error}</div>}
 
@@ -548,6 +530,8 @@ function ReportPage() {
               }
               chapters={chapters}
               checklist={checklist}
+              chatTimes={chatTimes}
+              assignedAt={assignment?.assigned_at}
               newcomerName={assignment?.name}
               mentorName={mentor?.name}
               documentLabel={documents.find((d) => d.document_id === documentId)?.label}

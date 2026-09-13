@@ -487,8 +487,8 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
    업무 제목 길이가 제각각이라 옆에 두면 어떤 줄만 두 줄이 되어 지저분해진다. */
 /* ── 리포트 차트 ───────────────────────────────────────────────── */
 /* ── 리포트 상세 (문서형) ─────────────────────────────────────────
-   인사 리포트 문서처럼 읽히게 한다: 카드를 여러 겹 쌓지 않고 흰 지면 한 장 위에
-   얇은 구분선으로 섹션을 나눈다. 강조색은 파랑 하나, 상태색(좋음/주의)은 문구와 함께만 쓴다. */
+   인사 리포트 문서처럼 읽히게 한다: 흰 지면 한 장 위에 얇은 구분선으로 섹션을 나누고,
+   강조색은 파랑 하나, 상태색(양호/주의)은 칩 문구와 함께만 쓴다. */
 .rpt {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius-lg); padding: 22px 28px 26px; margin-top: 4px;
@@ -498,9 +498,12 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
 
 .rpt-head { padding-bottom: 20px; border-bottom: 2px solid var(--text); }
 .rpt-kicker {
-  margin: 0; font-size: 11.5px; font-weight: 700; letter-spacing: .08em; color: var(--accent);
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin: 0; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; color: var(--accent);
 }
+.rpt-kicker span { font-weight: 500; letter-spacing: 0; color: var(--text-faint); }
 .rpt-title { margin: 4px 0 14px; font-size: 24px; font-weight: 700; letter-spacing: -.02em; }
+
 /* 기본 정보 표 — 라벨 칸(회색) 폭을 고정해 두 줄의 라벨·값 시작선을 맞춘다 */
 .rpt-meta {
   display: grid; grid-template-columns: 84px minmax(0, 1fr) 84px minmax(0, 1fr);
@@ -520,7 +523,7 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
 .rpt-sec { padding: 22px 0 4px; }
 .rpt-sec + .rpt-sec { border-top: 1px solid var(--border); }
 .rpt-sec-title {
-  display: flex; align-items: baseline; gap: 10px; margin: 0 0 14px;
+  display: flex; align-items: baseline; gap: 10px; margin: 0 0 12px;
   font-size: 15px; font-weight: 700; letter-spacing: -.01em;
 }
 .rpt-sec-title span {
@@ -528,97 +531,111 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
   font-size: 12px; color: var(--accent); font-weight: 700;
 }
 
-/* 요약: 왼쪽 종합 점수와 핵심 발견, 오른쪽 오각형 */
-.rpt-overview {
-  /* 두 번째 열을 minmax(0, 380px)로 두면 크롬이 내용(범례) 폭만큼만 잡아 차트가 작아진다 — 비율로 나눈다 */
-  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 28px; align-items: center;
+/* 요약 — 한 줄 판정이 가장 먼저 읽혀야 한다 */
+.rpt-verdict {
+  margin: 0 0 18px; padding: 12px 16px; font-size: 16px; font-weight: 700; line-height: 1.5;
+  letter-spacing: -.01em; background: var(--surface-2); border-left: 3px solid var(--text);
 }
-.rpt-score-label { margin: 0; font-size: 12.5px; color: var(--text-muted); font-weight: 600; }
+.rpt-overview {
+  /* 두 번째 열을 minmax(0, 380px)로 두면 크롬이 범례 폭만큼만 잡아 차트가 작아진다 — 비율로 나눈다 */
+  display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 28px; align-items: start;
+}
+.rpt-score { min-width: 0; }
+.rpt-score-row { display: flex; align-items: flex-end; gap: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
 .rpt-score-value {
-  margin: 2px 0 0; font-size: 56px; line-height: 1.05; font-weight: 800;
+  margin: 0; font-size: 52px; line-height: 1; font-weight: 800;
   letter-spacing: -.03em; font-variant-numeric: tabular-nums;
 }
-.rpt-score-value small { font-size: 16px; font-weight: 600; color: var(--text-faint); margin-left: 6px; letter-spacing: 0; }
-.rpt-score-delta { display: flex; align-items: center; gap: 8px; margin: 8px 0 18px; font-size: 13px; }
+.rpt-score-value small { font-size: 15px; font-weight: 600; color: var(--text-faint); margin-left: 4px; letter-spacing: 0; }
+.rpt-score-side { display: flex; flex-direction: column; gap: 2px; padding-bottom: 4px; font-size: 13px; }
+.rpt-score-label { font-size: 12.5px; color: var(--text-muted); font-weight: 600; }
 
-.delta { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.delta { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13px; }
 .delta.up { color: var(--success); }
 .delta.down { color: var(--danger); }
 .delta.flat, .delta.none { color: var(--text-faint); font-weight: 500; }
 
-.rpt-findings { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
-.rpt-findings li {
-  display: grid; grid-template-columns: 64px 1fr; gap: 10px; align-items: baseline;
-  padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px;
-}
-.rpt-findings b { font-size: 11.5px; font-weight: 700; }
-.rpt-findings li.good b { color: var(--success); }
-.rpt-findings li.warn b { color: var(--warn); }
-.rpt-findings li.neutral b { color: var(--text-faint); }
-.rpt-findings em { font-style: normal; font-weight: 700; margin-right: 6px; }
+.rpt-actions { padding-top: 14px; }
+.rpt-actions-title { margin: 0 0 8px; font-size: 12.5px; font-weight: 700; }
+.rpt-actions ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.rpt-actions li { font-size: 13.5px; line-height: 1.6; padding-left: 2px; }
+.rpt-actions li::marker { font-weight: 700; color: var(--accent); }
+.rpt-strength { margin: 14px 0 0; font-size: 13px; color: var(--text-muted); }
+.rpt-strength b { color: var(--success); margin-right: 6px; font-size: 12px; }
 
-/* flex 안에서 차트가 내용 폭으로 줄어들면 SVG가 같이 작아져 글자가 안 읽힌다 — 폭을 채우게 한다 */
 .rpt-radar { display: flex; justify-content: center; }
 .rpt-radar .chart { width: 100%; }
 .rpt-radar .chart-radar svg { max-width: 400px; }
 
-/* 표 */
+/* 지표별 분석 — 지표 하나당 한 줄: 왼쪽 점수·설명, 오른쪽 근거와 해석 */
+.metric {
+  display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px;
+  padding: 18px 0; border-top: 1px solid var(--border);
+}
+.metric:first-of-type { border-top: none; padding-top: 6px; }
+.metric-side { min-width: 0; }
+.metric-name { display: flex; align-items: center; gap: 8px; }
+.metric-name b { font-size: 14px; }
+.metric-score {
+  display: flex; align-items: baseline; gap: 8px; margin: 6px 0 4px;
+  font-size: 30px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums;
+}
+.metric-score small { font-size: 13px; font-weight: 600; color: var(--text-faint); margin-left: -4px; }
+.metric-meaning { margin: 0; font-size: 12.5px; color: var(--text-muted); }
+.metric-basis { margin: 6px 0 0; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.metric-formula { margin: 4px 0 0; font-size: 11.5px; color: var(--text-faint); line-height: 1.5; }
+.metric-body { min-width: 0; }
+.metric-summary {
+  margin: 12px 0 0; padding-top: 10px; border-top: 1px dashed var(--border);
+  font-size: 13px; color: var(--text-muted); line-height: 1.65;
+}
+.evidence-note { margin: 10px 0 0; font-size: 12.5px; color: var(--text-muted); }
+.evidence-note b { color: var(--text); margin-right: 6px; font-size: 12px; }
+
+.chip {
+  display: inline-block; font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px;
+}
+.chip-good { background: var(--success-soft); color: var(--success); }
+.chip-concern { background: var(--warn-soft); color: var(--warn); }
+.chip-none { background: #eceff2; color: var(--text-muted); }
+
 .rpt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .rpt-table th {
   text-align: left; font-size: 11.5px; font-weight: 600; color: var(--text-muted);
-  background: none; padding: 8px 10px; border-bottom: 1px solid var(--text);
+  background: none; padding: 8px 6px; border-bottom: 1px solid var(--text);
 }
-.rpt-table td { padding: 11px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.rpt-table td { padding: 8px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .rpt-table tbody tr:last-child td { border-bottom: none; }
 .rpt-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.rpt-table .sub { font-size: 12px; color: var(--text-muted); }
-.rpt-table td .sub { margin-top: 2px; }
 .rpt-table .warn { color: var(--warn); font-weight: 700; }
-.rpt-table.compact td, .rpt-table.compact th { padding: 8px 6px; }
-.rpt-table .score-col { width: 34%; }
-.score-bar { display: flex; align-items: center; gap: 10px; }
-.score-bar .bar { flex: 1; height: 8px; }
-.score-bar .bar i.low { background: var(--warn); }
-.score-num { min-width: 28px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
-.rpt-table .basis { margin-top: 3px; font-size: 11.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 
-/* 근거 데이터: 선으로 나눈 2열 격자 */
-.rpt-evidence {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-top: 1px solid var(--border); border-left: 1px solid var(--border);
-}
-.rpt-card {
-  padding: 16px 18px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
-  min-width: 0;
-}
-.rpt-card h6 { margin: 0 0 12px; font-size: 13.5px; font-weight: 700; }
-.rpt-card-note { margin: 12px 0 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.65; }
-.rpt-card .stat .n.warn { color: var(--warn); }
-.rpt-card .stat .n.good { color: var(--success); }
-.bar-prev { font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.bar-prev { font-size: 11.5px; font-weight: 400; color: var(--text-faint); }
 
-/* 질문 흐름(침묵 위험) — 판정 칩, 날짜 구간별 막대 두 줄 */
-.flow { display: flex; flex-direction: column; gap: 12px; }
-.flow-verdict { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.flow-rule { font-size: 12px; color: var(--text-faint); }
-.chip {
-  display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
-}
-.chip-good { background: var(--success-soft); color: var(--success); }
-.chip-warn { background: var(--warn-soft); color: var(--warn); }
-.flow-row { display: grid; grid-template-columns: 112px minmax(0, 1fr) 44px; align-items: center; gap: 12px; }
-.flow-label { display: flex; flex-direction: column; line-height: 1.35; }
-.flow-label b { font-size: 12.5px; font-weight: 600; }
-.flow-label span { font-size: 11.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
-.flow-row .bar { height: 10px; }
-.flow-row .bar i.low { background: var(--warn); }
-.flow-num { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.timeline svg { width: 100%; height: auto; display: block; }
 
+/* 진행도 근거 — 체크리스트 완료 현황 */
+.progress-list { list-style: none; margin: 0; padding: 0; }
+.progress-list li {
+  display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 10px; align-items: center;
+  padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+}
+.progress-list li:last-child { border-bottom: none; }
+.progress-list .mark {
+  width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--border-strong);
+  display: grid; place-items: center; font-size: 11px; line-height: 1;
+}
+.progress-list li.done .mark { background: var(--success); border-color: var(--success); color: #fff; }
+.progress-list .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.progress-list li.done .title { color: var(--text-muted); }
+.progress-list .when { font-size: 12px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+/* 산정 기준 — 기본은 접어둔다 */
 .rpt-foot {
-  margin-top: 20px; padding: 12px 14px; background: var(--surface-2);
-  border-radius: var(--radius); font-size: 12px; line-height: 1.7; color: var(--text-muted);
+  margin-top: 18px; padding: 10px 14px; background: var(--surface-2);
+  border-radius: var(--radius); font-size: 12px; color: var(--text-muted);
 }
-.rpt-foot b { color: var(--text); margin-right: 6px; }
+.rpt-foot summary { cursor: pointer; font-weight: 700; color: var(--text); }
+.rpt-foot p { margin: 8px 0 2px; line-height: 1.7; }
 
 .chart { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 /* viewBox 기준으로 글자까지 함께 커지므로 폭을 묶어둔다 — 넓은 카드에서 레이더 라벨이 과하게 커진다 */
@@ -679,7 +696,7 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
   .rpt { padding: 18px 16px 20px; }
   .rpt-meta { grid-template-columns: 76px minmax(0, 1fr); }
   .rpt-overview { grid-template-columns: 1fr; }
-  .rpt-evidence { grid-template-columns: 1fr; }
+  .metric { grid-template-columns: 1fr; gap: 12px; }
   /* 좁은 화면에서는 도넛 범례를 아래로 내린다 */
   .chart-donut { flex-direction: column; align-items: center; }
   .chart-legend-list { width: 100%; }
@@ -696,7 +713,3 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
   .chat { height: calc(100vh - 110px); }
 }
 
-.rpt-score { min-width: 0; }
-/* 좁은 화면에서 표만 가로로 스크롤되게 한다 — 페이지 전체가 옆으로 밀리지 않게 */
-.table-scroll { overflow-x: auto; }
-.table-scroll .rpt-table { min-width: 560px; }
