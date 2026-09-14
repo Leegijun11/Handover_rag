@@ -30,3 +30,6 @@ PyJWT==2.13.0
 bcrypt==5.0.0
 slowapi==0.1.10
 python-multipart==0.0.32
+# 테스트 코드용 (신설, guidelines 5-10). 서버 실행엔 필요 없지만, 별도 dev-requirements로
+# 안 나누고 하나로 유지 — 지금 규모에서 파일을 나눌 실익보다 "설치 한 번으로 끝" 쪽이 낫다.
+pytest==9.1.1
