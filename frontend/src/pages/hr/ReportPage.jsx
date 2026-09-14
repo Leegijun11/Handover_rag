@@ -231,7 +231,7 @@ function ReportDetail({
 
   const actions = buildActions({ report, score: current, chapters, checklist, assignedAt });
   const strength = pickStrength(current);
-  const headline = buildHeadline(current, actions);
+  const headline = buildHeadline({ actions, report, assignedAt });
 
   const radarAxes = SCORE_AXES.map((axis) => ({
     label: axis.label,
@@ -368,8 +368,8 @@ function ReportDetail({
         <p>
           지표 점수는 이 리포트의 질문 기록과 체크리스트로 계산한 0~100점이고, 60점 미만을 주의로
           표시합니다. 종합 점수는 계산할 수 있는 지표의 평균이며 데이터가 없는 지표는 빠집니다.
-          배정 후 2주가 안 됐으면 질문 깊이는 권장 조치에 넣지 않습니다 — 초반엔 사실 확인 질문이
-          많은 게 정상이기 때문입니다. 체크리스트에는 생성 시각이 없어 분석 기간 이후 추가된 항목도
+          배정 후 2주가 안 됐으면 질문 깊이·업무 범위·진행도는 권장 조치에 넣지 않습니다 — 초반엔
+          사실 확인 질문이 많고 일부 업무만 묻는 게 정상이기 때문입니다. 체크리스트에는 생성 시각이 없어 분석 기간 이후 추가된 항목도
           진행도의 전체 항목 수에 들어갑니다. 점수는 적응 상태를 살피기 위한 참고 지표이며 평가
           용도가 아닙니다.
         </p>

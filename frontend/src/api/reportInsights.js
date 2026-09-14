@@ -12,8 +12,11 @@ import { formatDate, parseServerDate } from "./datetime";
 // 이 점수 미만이면 주의로 본다. 지표별 상태 칩과 권장 조치가 같은 기준을 쓴다.
 export const CONCERN_BELOW = 60;
 
-// 배정 직후에는 사실 확인 질문이 많은 것이 정상이다 — 이 기간 안에는 질문 깊이를 주의로 띄우지 않는다.
+// 배정 직후에는 사실 확인 질문이 많고, 몇 개 업무만 묻고, 체크리스트도 거의 안 끝낸 게 정상이다.
+// 이 기간 안에는 질문 깊이·업무 범위·진행도를 권장 조치로 올리지 않는다 — 올리면 1주차 신입이
+// 전부 "주의"로 보인다. 반복 질문과 질문 급감은 시기와 무관하게 짚는다.
 const EARLY_DAYS = 14;
+const EARLY_EXEMPT = new Set(["depth", "coverage", "progress"]);
 
 // 질문 흐름·진행도는 높다고 좋은 게 아니라서 강점 후보에서 뺀다. 반복 질문이 많아도 흐름 점수는
 // 올라가므로, 이걸 강점으로 뽑으면 "같은 걸 계속 묻는 신입"이 오히려 칭찬받는 모순이 생긴다.
@@ -30,11 +33,17 @@ export function statusOf(score) {
   return score < CONCERN_BELOW ? "concern" : "good";
 }
 
-function isEarly(report, assignedAt) {
+/** 리포트 기간 끝 기준 배정 후 경과 일수. 배정일을 모르면 null. */
+function daysSinceAssigned(report, assignedAt) {
   const start = parseServerDate(assignedAt);
   const end = parseServerDate(report?.period_end);
-  if (!start || !end) return false;
-  return (end - start) / 86400000 < EARLY_DAYS;
+  if (!start || !end) return null;
+  return Math.floor((end - start) / 86400000);
+}
+
+function isEarly(report, assignedAt) {
+  const days = daysSinceAssigned(report, assignedAt);
+  return days !== null && days < EARLY_DAYS;
 }
 
 /** 질문이 한 번도 닿지 않은 대분류 업무. 소분류에 달린 질문은 대분류로 묶는다. */
@@ -64,7 +73,6 @@ export function buildActions({ report, score, chapters, checklist, assignedAt })
       return `'${top.title}'을 완료로 체크했지만 이후에도 ${top.question_count_after_complete}번 더 물었습니다. 한 번 옆에서 같이 해보며 확인해주세요.`;
     },
     depth: () => {
-      if (early) return null;
       return "아직 사실을 확인하는 질문이 대부분입니다. 판단이 필요한 실제 사례를 하나 맡겨보세요.";
     },
     coverage: () => {
@@ -90,6 +98,7 @@ export function buildActions({ report, score, chapters, checklist, assignedAt })
   };
 
   return SCORE_AXES.filter((axis) => statusOf(score.axes[axis.key]) === "concern")
+    .filter((axis) => !(early && EARLY_EXEMPT.has(axis.key)))
     .sort(byUrgency)
     .map((axis) => ({ key: axis.key, text: makers[axis.key]() }))
     .filter((action) => action.text)
@@ -104,10 +113,18 @@ export function pickStrength(score) {
     .sort((a, b) => b.value - a.value)[0] || null;
 }
 
-/** 맨 위 한 줄 판정. 권장 조치의 첫 번째(가장 급한) 지표 문장을 쓰고, 없으면 순조롭다고 적는다. */
-export function buildHeadline(score, actions) {
+/**
+ * 맨 위 한 줄 판정. 권장 조치의 첫 번째(가장 급한) 지표 문장을 쓰고, 없으면 — 배정 초기면
+ * "아직 이르다", 아니면 "순조롭다"고 적는다. 초기에 "순조롭다"고 쓰면 데이터가 적어서
+ * 안 잡힌 것을 좋은 신호로 착각하게 된다.
+ */
+export function buildHeadline({ actions, report, assignedAt }) {
   const worst = actions.length ? SCORE_AXES.find((axis) => axis.key === actions[0].key) : null;
   if (worst) return worst.concern;
+  const days = daysSinceAssigned(report, assignedAt);
+  if (days !== null && days < EARLY_DAYS) {
+    return `배정 ${days + 1}일차라 아직 판단하기 이릅니다. 지금은 질문이 이어지는지만 살펴보세요.`;
+  }
   return "특별히 짚어야 할 신호 없이 순조롭게 적응하고 있습니다.";
 }
 

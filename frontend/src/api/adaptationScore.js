@@ -18,7 +18,7 @@ export const SCORE_AXES = [
   {
     key: "depth",
     label: "질문 깊이",
-    formula: "판단·심화 질문 ÷ 전체 질문",
+    formula: "(판단·심화 질문 + 절차 질문 × 0.5) ÷ 전체 질문",
     meaning: "단순 확인을 넘어서는 질문을 하는지",
     strength: "단순 확인을 넘어 판단이 필요한 질문을 하고 있습니다.",
     concern: "아직 사실을 확인하는 질문 위주로 묻고 있습니다.",
@@ -94,7 +94,14 @@ export function computeAdaptationScore(report, chapters, checklist) {
   );
 
   const axes = {
-    depth: questions ? pct(((counts.judgment || 0) + (counts.advanced || 0)) / questions) : null,
+    // 절차 질문("어떻게 하나요?")은 직접 해보려는 단계라 사실 확인보다 한 단계 깊다. 0으로 치면
+    // 순조롭게 적응 중인 신입도 거의 늘 주의로 떠서, 절반만 인정한다.
+    depth: questions
+      ? pct(
+          ((counts.judgment || 0) + (counts.advanced || 0) + (counts.procedure || 0) * 0.5) /
+            questions,
+        )
+      : null,
     coverage: tops.size ? pct(touched.size / tops.size) : null,
     // 서버의 gap_task는 완료 후 같은 업무 질문이 1건만 있어도 그 항목을 센다. 그대로 비율로
     // 쓰면 "읽어보기를 체크하고 한 번 더 물어본" 자연스러운 행동까지 불일치가 되어 점수가
