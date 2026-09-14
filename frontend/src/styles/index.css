@@ -606,6 +606,8 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
 .chip-good { background: var(--success-soft); color: var(--success); }
 .chip-concern { background: var(--warn-soft); color: var(--warn); }
 .chip-none { background: #eceff2; color: var(--text-muted); }
+.chip-watch { background: var(--accent-soft); color: var(--accent); }
+.rpt-score-label .chip { margin-left: 8px; vertical-align: 1px; }
 
 .rpt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .rpt-table th {

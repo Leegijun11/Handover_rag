@@ -6,11 +6,13 @@ import { getChapters, listMyDocuments } from "../../services/router/document";
 import { getChecklist } from "../../services/router/checklist";
 import { SCORE_AXES, computeAdaptationScore } from "../../api/adaptationScore";
 import {
+  axisStatus,
   buildActions,
   buildHeadline,
+  daysSinceAssigned,
+  isEarly,
   pickStrength,
   splitChecklist,
-  statusOf,
   untouchedChapters,
 } from "../../api/reportInsights";
 import { getChatLogs } from "../../services/router/chat";
@@ -87,7 +89,7 @@ function Delta({ value }) {
   );
 }
 
-const STATUS_LABEL = { good: "양호", concern: "주의", none: "데이터 부족" };
+const STATUS_LABEL = { good: "양호", concern: "주의", watch: "관찰 중", none: "데이터 부족" };
 
 /** 지표 하나의 근거 — 지표와 신호를 1:1로 묶어서 같은 사실을 두 번 보여주지 않는다. */
 function MetricEvidence({ axisKey, report, previousReport, chapters, checklist, chatTimes, chapterTitleOf }) {
@@ -229,8 +231,11 @@ function ReportDetail({
   const totalDelta =
     previous && previous.total !== null && current.total !== null ? current.total - previous.total : null;
 
+  // 배정 2주 전이면 점수는 그대로 보여주되 "참고용"으로 표시하고, 초기에 낮은 게 정상인 지표는
+  // "주의" 대신 "관찰 중"으로 둔다 — 판정은 "아직 이르다"인데 칩은 주의투성이인 모순을 막는다.
+  const early = isEarly(report, assignedAt);
   const actions = buildActions({ report, score: current, chapters, checklist, assignedAt });
-  const strength = pickStrength(current);
+  const strength = pickStrength(current, early);
   const headline = buildHeadline({ actions, report, assignedAt });
 
   const radarAxes = SCORE_AXES.map((axis) => ({
@@ -282,7 +287,15 @@ function ReportDetail({
                 <small>/ 100</small>
               </p>
               <div className="rpt-score-side">
-                <span className="rpt-score-label">종합 점수</span>
+                <span className="rpt-score-label">
+                  종합 점수
+                  {early && <span className="chip chip-watch">초기 · 참고용</span>}
+                </span>
+                {early && (
+                  <span className="muted">
+                    배정 {daysSinceAssigned(report, assignedAt) + 1}일차 — 2주가 지나야 점수로 판단합니다
+                  </span>
+                )}
                 {previous ? (
                   <span>
                     <Delta value={totalDelta} />{" "}
@@ -328,7 +341,7 @@ function ReportDetail({
           const value = current.axes[axis.key];
           const prev = previous?.axes[axis.key];
           const delta = value !== null && prev !== null && prev !== undefined ? value - prev : null;
-          const status = statusOf(value);
+          const status = axisStatus(axis.key, value, early);
           const summary = summaryOf(axis.key);
           return (
             <div className="metric" key={axis.key}>
@@ -344,6 +357,9 @@ function ReportDetail({
                 </p>
                 <p className="metric-meaning">{axis.meaning}</p>
                 <p className="metric-basis">{current.basis[axis.key]}</p>
+                {status === "watch" && (
+                  <p className="metric-basis">배정 2주 전에는 이 점수가 낮은 게 일반적입니다.</p>
+                )}
                 <p className="metric-formula">{axis.formula}</p>
               </div>
               <div className="metric-body">
@@ -368,8 +384,9 @@ function ReportDetail({
         <p>
           지표 점수는 이 리포트의 질문 기록과 체크리스트로 계산한 0~100점이고, 60점 미만을 주의로
           표시합니다. 종합 점수는 계산할 수 있는 지표의 평균이며 데이터가 없는 지표는 빠집니다.
-          배정 후 2주가 안 됐으면 질문 깊이·업무 범위·진행도는 권장 조치에 넣지 않습니다 — 초반엔
-          사실 확인 질문이 많고 일부 업무만 묻는 게 정상이기 때문입니다. 체크리스트에는 생성 시각이 없어 분석 기간 이후 추가된 항목도
+          배정 후 2주가 안 됐으면 종합 점수는 참고용으로 표시하고, 질문 깊이·업무 범위·진행도는
+          60점 미만이어도 주의 대신 관찰 중으로 두며 권장 조치와 잘하고 있는 점에도 넣지 않습니다 —
+          초반엔 사실 확인 질문이 많고 일부 업무만 묻는 게 정상이기 때문입니다. 체크리스트에는 생성 시각이 없어 분석 기간 이후 추가된 항목도
           진행도의 전체 항목 수에 들어갑니다. 점수는 적응 상태를 살피기 위한 참고 지표이며 평가
           용도가 아닙니다.
         </p>

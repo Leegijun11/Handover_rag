@@ -33,15 +33,24 @@ export function statusOf(score) {
   return score < CONCERN_BELOW ? "concern" : "good";
 }
 
+/**
+ * 지표 하나의 상태 — statusOf에 배정 초기 예외를 더한 것. 초기에 낮은 게 정상인 지표는 "주의" 대신
+ * "watch"(관찰 중)로 둔다. 지표 칩과 권장 조치가 이 함수 하나를 같이 써서 둘이 어긋나지 않는다.
+ */
+export function axisStatus(key, score, early) {
+  const status = statusOf(score);
+  return status === "concern" && early && EARLY_EXEMPT.has(key) ? "watch" : status;
+}
+
 /** 리포트 기간 끝 기준 배정 후 경과 일수. 배정일을 모르면 null. */
-function daysSinceAssigned(report, assignedAt) {
+export function daysSinceAssigned(report, assignedAt) {
   const start = parseServerDate(assignedAt);
   const end = parseServerDate(report?.period_end);
   if (!start || !end) return null;
   return Math.floor((end - start) / 86400000);
 }
 
-function isEarly(report, assignedAt) {
+export function isEarly(report, assignedAt) {
   const days = daysSinceAssigned(report, assignedAt);
   return days !== null && days < EARLY_DAYS;
 }
@@ -97,16 +106,20 @@ export function buildActions({ report, score, chapters, checklist, assignedAt })
     },
   };
 
-  return SCORE_AXES.filter((axis) => statusOf(score.axes[axis.key]) === "concern")
-    .filter((axis) => !(early && EARLY_EXEMPT.has(axis.key)))
+  return SCORE_AXES.filter((axis) => axisStatus(axis.key, score.axes[axis.key], early) === "concern")
     .sort(byUrgency)
     .map((axis) => ({ key: axis.key, text: makers[axis.key]() }))
     .filter((action) => action.text)
     .slice(0, 3);
 }
 
-/** 가장 좋은 지표 하나 — 질문 깊이·업무 범위·이해 일치도 중에서만 고른다. */
-export function pickStrength(score) {
+/**
+ * 가장 좋은 지표 하나 — 질문 깊이·업무 범위·이해 일치도 중에서만 고른다. 배정 초기에는 고르지
+ * 않는다: 완료 항목이 1개뿐이어도 이해 일치도가 100점이 되는 식이라, "아직 판단하기 이르다"는
+ * 판정 옆에 칭찬을 붙이면 같은 이유로 틀린 말이 된다.
+ */
+export function pickStrength(score, early = false) {
+  if (early) return null;
   return SCORE_AXES.filter((axis) => STRENGTH_CANDIDATES.has(axis.key))
     .map((axis) => ({ ...axis, value: score.axes[axis.key] }))
     .filter((axis) => axis.value !== null && axis.value >= 80)
