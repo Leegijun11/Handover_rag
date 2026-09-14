@@ -186,7 +186,7 @@ def _get_assignment(db: Session, newcomer_id: str):
 
 # ── API ──
 @router.post("/document/upload", status_code=201)
-async def upload_document(
+def upload_document(
     mentor_id: str = Form(...),
     files: list[UploadFile] | None = File(None),
     chapters: str | None = Form(None),  # JSON 문자열: [{"title": "...", "content": "..."}]
@@ -205,6 +205,12 @@ async def upload_document(
     첫 파일명에서 확장자 제거, chapters 모드는 첫 챕터 제목)으로 계산한다. 수정 API는
     따로 안 둔다 — 문서 목록을 훑어보는 화면 자체가 없고(배정 화면 드롭다운에만
     쓰임), 잘못 지었으면 다시 올리는 게 더 단순하다.
+
+    동기(def)로 선언한 이유(신설, guidelines 5-9): 안에서 OpenAI 임베딩을 동기 방식으로
+    호출하는데, 이게 async def 안에 있으면 이벤트 루프 자체를 막아서 이 요청 하나가
+    서버 전체(다른 사용자의 챗봇 응답 포함)를 멈추게 한다 — 실제로 이 문제가 있었다.
+    동기로 선언하면 FastAPI가 스레드풀에서 돌려서, 이 안에서 블로킹 호출을 해도
+    다른 요청을 막지 않는다 (나머지 라우터들과 동일한 패턴).
     """
     require_role(current_user, "mentor")
     require_self(current_user, mentor_id)
@@ -220,7 +226,7 @@ async def upload_document(
     if has_files:
         parsed_chapters: list[dict] = []
         for f in files:
-            raw = await f.read()
+            raw = f.file.read()  # 동기 read (async def가 아니라 await 불필요, 위 함수 시그니처 참고)
             if len(raw) > MAX_FILE_SIZE:
                 raise HTTPException(
                     status_code=400, detail=f"'{f.filename}' 파일 크기는 10MB를 초과할 수 없습니다"
