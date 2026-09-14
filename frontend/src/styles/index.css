@@ -209,6 +209,14 @@ textarea { resize: vertical; min-height: 88px; line-height: 1.6; }
   margin: 0 0 16px; font-size: 13px; color: var(--text-muted); flex: 1;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
+.demo-card .demo-files {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+  margin: -6px 0 14px; font-size: 12px;
+}
+.demo-card .demo-files span { color: var(--text-faint); }
+.demo-card .demo-files a { color: var(--accent); text-decoration: none; }
+.demo-card .demo-files a::before { content: "↓ "; }
+.demo-card .demo-files a:hover { text-decoration: underline; }
 .demo-card .actions { margin-top: 0; }
 .demo-card .btn { flex: 1; }
 
