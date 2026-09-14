@@ -45,6 +45,9 @@ function AppShell({ children }) {
     navigate("/login", { replace: true });
   }
 
+  // DemoPage.jsx의 데모 계정 이메일 도메인
+  const isDemoAccount = Boolean(user?.email?.endsWith("@handover.demo"));
+
   async function handleDeleteAccount() {
     if (!window.confirm("정말 탈퇴하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) return;
     setDeleting(true);
@@ -79,9 +82,12 @@ function AppShell({ children }) {
             {deleteError}
           </span>
         )}
-        <Button size="sm" variant="danger" disabled={deleting} onClick={handleDeleteAccount}>
-          {deleting ? "탈퇴 중…" : "회원탈퇴"}
-        </Button>
+        {/* 데모 계정은 여러 방문자가 같이 쓰므로 탈퇴 버튼을 숨긴다 — 서버도 403으로 막는다 */}
+        {!isDemoAccount && (
+          <Button size="sm" variant="danger" disabled={deleting} onClick={handleDeleteAccount}>
+            {deleting ? "탈퇴 중…" : "회원탈퇴"}
+          </Button>
+        )}
         <Button size="sm" onClick={handleLogout}>
           로그아웃
         </Button>

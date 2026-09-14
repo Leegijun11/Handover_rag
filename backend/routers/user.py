@@ -5,6 +5,7 @@
 없는 이 라우터 전용 입력이라서다 (guidelines 5-2).
 """
 
+import os
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -152,6 +153,12 @@ def delete_user(
     테이블에 걸쳐 있어 범위가 커지므로, 필요해지면 그때 따로 설계한다.
     """
     require_self(current_user, user_id)
+
+    # 데모 계정은 심사위원 여러 명이 같이 쓰는 공유 계정이라, 한 명이 탈퇴하면 그 회사 데모가
+    # 모두에게 막힌다 (guidelines 1-8, 6-6). rate limit 예외와 같은 DEMO_USER_IDS 목록을 쓴다.
+    demo_ids = set(filter(None, os.getenv("DEMO_USER_IDS", "").split(",")))
+    if user_id in demo_ids:
+        raise HTTPException(status_code=403, detail="데모 계정은 탈퇴할 수 없습니다")
 
     user = db.query(UserORM).filter(UserORM.user_id == user_id).first()
     if user is None:

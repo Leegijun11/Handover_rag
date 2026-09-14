@@ -358,7 +358,7 @@ function ReportDetail({
                 <p className="metric-meaning">{axis.meaning}</p>
                 <p className="metric-basis">{current.basis[axis.key]}</p>
                 {status === "watch" && (
-                  <p className="metric-basis">배정 2주 전에는 이 점수가 낮은 게 일반적입니다.</p>
+                  <p className="metric-note">배정 2주 전에는 이 점수가 낮은 게 일반적입니다.</p>
                 )}
                 <p className="metric-formula">{axis.formula}</p>
               </div>
