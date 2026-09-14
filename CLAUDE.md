@@ -57,7 +57,7 @@ Three people are building this in parallel against the frozen specs in `guidelin
 
 - Backend: `uvicorn main:app --reload` from `backend/`, fixed port `8000`.
 - Env vars (see `guidelines/5_기술스택_폴더구조.md` §5-4 for the full list): `OPENAI_API_KEY`, `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`, `CHROMA_PERSIST_DIR`, `JWT_SECRET_KEY`, `JWT_EXPIRE_MINUTES`, `DEMO_USER_IDS`. Real values go in `.env` (gitignored); only `.env.example` is committed. An empty `JWT_SECRET_KEY=` line in `.env` is treated the same as unset (falls back to a dev default with a logged warning) — don't assume a blank value means "disabled".
-- No test suite or lint config exists yet in this repo — check `backend/requirements.txt` / `frontend/package.json` once they're added rather than assuming a framework.
+- Backend tests: `pytest` (added 9/14, guidelines 5-10) — run `cd backend && pytest` (or `.venv/Scripts/python.exe -m pytest`). Only a handful of example tests exist so far under `backend/tests/`, covering pure-logic functions (document chapter parsing, report signal computation, chat request validation) that need no live MySQL/OpenAI — not full coverage. No frontend test suite or lint config exists yet — check `frontend/package.json` once one is added rather than assuming a framework.
 
 ## Conventions specific to this repo
 
