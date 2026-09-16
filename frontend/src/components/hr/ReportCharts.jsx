@@ -269,12 +269,49 @@ export function DonutChart({ entries, unit = "건" }) {
   );
 }
 
-/* ── 날짜별 질문 흐름 ─────────────────────────────────────────────
-   "질문이 끊겼는가"는 앞/뒤 절반 합계 두 숫자보다 날짜별 막대로 봐야 읽힌다.
-   기간 중간에 점선을 그어서 서버가 급감 여부를 판단하는 기준선을 같이 보여준다. */
+/* ── 질문 유형 비율 한 줄 막대 ───────────────────────────────────
+   위쪽 오각형과 성격이 겹치지 않게, 질문 깊이 근거는 "비율 한 줄"로 보여준다.
+   막대 하나에 유형 네 개를 이어 붙이고 건수는 범례에 적는다. */
+
+export function ShareBar({ entries }) {
+  const total = entries.reduce((sum, e) => sum + e.value, 0);
+  if (!total) return <div className="empty" style={{ padding: 16 }}>기간 내 질문 없음</div>;
+
+  return (
+    <div className="share">
+      <div className="share-bar">
+        {entries.map((e, i) =>
+          e.value ? (
+            <i
+              key={e.label}
+              style={{ width: `${(e.value / total) * 100}%`, background: CHART_COLORS[i] }}
+              title={`${e.label} ${e.value}건`}
+            />
+          ) : null,
+        )}
+      </div>
+      <ul className="chart-legend-list share-legend">
+        {entries.map((e, i) => (
+          <li key={e.label}>
+            <i style={{ background: CHART_COLORS[i] }} />
+            <span className="name">{e.label}</span>
+            <span className="value">{e.value}건</span>
+            <span className="pct">{Math.round((e.value / total) * 100)}%</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/* ── 날짜별 활동 ──────────────────────────────────────────────────
+   "손을 놓지 않고 붙어 있는가"는 합계 숫자로는 안 보인다. 날짜별로 질문과 체크리스트 완료를
+   쌓아 올려서, 어느 날부터 조용해졌는지를 사수가 눈으로 찾게 한다. 기간을 반으로 가르는
+   기준선은 두지 않는다 — 그 경계는 설명이 필요한 개념이라 사수에게 와닿지 않는다. */
 
 const TL = { w: 640, h: 170, left: 30, right: 10, top: 14, bottom: 26 };
 const DAY = 86400000;
+const MIN_AXIS_MAX = 3; // 하루 1건짜리 막대가 꽉 차 보이지 않게 세로축 최소 눈금
 
 function localMidnight(date) {
   const d = new Date(date);
@@ -282,7 +319,7 @@ function localMidnight(date) {
   return d;
 }
 
-export function QuestionTimeline({ times, start, end, dropped }) {
+export function ActivityTimeline({ questionTimes, doneTimes, start, end }) {
   if (!start || !end) return null;
 
   const firstDay = localMidnight(start);
@@ -290,27 +327,29 @@ export function QuestionTimeline({ times, start, end, dropped }) {
   // 기간이 한 달을 넘으면 막대가 가늘어져 읽히지 않으므로 주 단위로 묶는다.
   const step = days > 31 ? 7 : 1;
   const buckets = Math.ceil(days / step);
-  const counts = new Array(buckets).fill(0);
-  times.forEach((t) => {
+  const questions = new Array(buckets).fill(0);
+  const dones = new Array(buckets).fill(0);
+  const put = (arr, t) => {
     const index = Math.floor((localMidnight(t) - firstDay) / DAY / step);
-    if (index >= 0 && index < buckets) counts[index] += 1;
-  });
+    if (index >= 0 && index < buckets) arr[index] += 1;
+  };
+  (questionTimes || []).forEach((t) => put(questions, t));
+  (doneTimes || []).forEach((t) => put(dones, t));
 
   const plotW = TL.w - TL.left - TL.right;
   const plotH = TL.h - TL.top - TL.bottom;
   const slot = plotW / buckets;
   const barW = Math.max(3, Math.min(28, slot - 4));
-  const max = Math.max(1, ...counts);
+  const max = Math.max(MIN_AXIS_MAX, ...questions.map((q, i) => q + dones[i]));
   const baseY = TL.top + plotH;
 
-  const mid = new Date((start.getTime() + end.getTime()) / 2);
-  const midX = TL.left + ((mid - firstDay) / (buckets * step * DAY)) * plotW;
   const md = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
   const bucketDate = (i) => new Date(firstDay.getTime() + i * step * DAY);
+  const isWeekend = (i) => step === 1 && [0, 6].includes(bucketDate(i).getDay());
 
   return (
     <div className="timeline">
-      <svg viewBox={`0 0 ${TL.w} ${TL.h}`} role="img" aria-label="날짜별 질문 수">
+      <svg viewBox={`0 0 ${TL.w} ${TL.h}`} role="img" aria-label="날짜별 질문과 체크리스트 완료">
         <line x1={TL.left} x2={TL.w - TL.right} y1={TL.top} y2={TL.top} stroke={GRID} strokeWidth="1" />
         <line x1={TL.left} x2={TL.w - TL.right} y1={baseY} y2={baseY} stroke="#cdd3da" strokeWidth="1" />
         <text x={TL.left - 6} y={TL.top} textAnchor="end" dominantBaseline="middle" className="chart-axis">
@@ -320,38 +359,59 @@ export function QuestionTimeline({ times, start, end, dropped }) {
           0
         </text>
 
-        {counts.map((count, i) => {
-          if (!count) return null;
-          const h = Math.max(2, (count / max) * plotH);
-          const x = TL.left + slot * i + (slot - barW) / 2;
-          const afterMid = x + barW / 2 > midX;
-          return (
+        {/* 주말은 질문이 없는 게 정상이라 옅게 칠해서 "끊긴 날"과 구분한다 */}
+        {questions.map((_, i) =>
+          isWeekend(i) ? (
             <rect
-              key={i}
-              x={x.toFixed(1)}
-              y={(baseY - h).toFixed(1)}
-              width={barW.toFixed(1)}
-              height={h.toFixed(1)}
-              rx="3"
-              fill={afterMid && dropped ? CHART_COLORS[3] : CHART_COLORS[0]}
-            >
-              <title>{`${md(bucketDate(i))}${step > 1 ? " 주" : ""} 질문 ${count}건`}</title>
-            </rect>
+              key={`w${i}`}
+              x={(TL.left + slot * i).toFixed(1)}
+              y={TL.top}
+              width={slot.toFixed(1)}
+              height={plotH.toFixed(1)}
+              fill="#f2f4f7"
+            />
+          ) : null,
+        )}
+
+        {questions.map((count, i) => {
+          const done = dones[i];
+          if (!count && !done) return null;
+          const x = TL.left + slot * i + (slot - barW) / 2;
+          const qh = count ? Math.max(2, (count / max) * plotH) : 0;
+          const dh = done ? Math.max(2, (done / max) * plotH) : 0;
+          const label = `${md(bucketDate(i))}${step > 1 ? " 주" : ""} 질문 ${count}건${
+            done ? ` · 체크리스트 완료 ${done}개` : ""
+          }`;
+          return (
+            <g key={i}>
+              {qh > 0 && (
+                <rect
+                  x={x.toFixed(1)}
+                  y={(baseY - qh).toFixed(1)}
+                  width={barW.toFixed(1)}
+                  height={qh.toFixed(1)}
+                  rx="3"
+                  fill={CHART_COLORS[0]}
+                >
+                  <title>{label}</title>
+                </rect>
+              )}
+              {dh > 0 && (
+                <rect
+                  x={x.toFixed(1)}
+                  y={(baseY - qh - dh).toFixed(1)}
+                  width={barW.toFixed(1)}
+                  height={dh.toFixed(1)}
+                  rx="3"
+                  fill={CHART_COLORS[5]}
+                >
+                  <title>{label}</title>
+                </rect>
+              )}
+            </g>
           );
         })}
 
-        <line
-          x1={midX.toFixed(1)}
-          x2={midX.toFixed(1)}
-          y1={TL.top - 4}
-          y2={baseY}
-          stroke={BASELINE}
-          strokeWidth="1.5"
-          strokeDasharray="4 3"
-        />
-        <text x={midX.toFixed(1)} y={TL.h - 6} textAnchor="middle" className="chart-axis">
-          중간 {md(mid)}
-        </text>
         <text x={TL.left} y={TL.h - 6} textAnchor="start" className="chart-axis">
           {md(start)}
         </text>
@@ -359,6 +419,17 @@ export function QuestionTimeline({ times, start, end, dropped }) {
           {md(end)}
         </text>
       </svg>
+      <div className="chart-legend">
+        <span>
+          <i style={{ background: CHART_COLORS[0] }} />
+          질문
+        </span>
+        <span>
+          <i style={{ background: CHART_COLORS[5] }} />
+          체크리스트 완료
+        </span>
+        <span className="chart-scale">옥은 칸 = 주말</span>
+      </div>
     </div>
   );
 }

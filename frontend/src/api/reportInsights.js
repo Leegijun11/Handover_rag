@@ -18,14 +18,13 @@ export const CONCERN_BELOW = 60;
 const EARLY_DAYS = 14;
 const EARLY_EXEMPT = new Set(["depth", "coverage", "progress"]);
 
-// 질문 흐름·진행도는 높다고 좋은 게 아니라서 강점 후보에서 뺀다. 반복 질문이 많아도 흐름 점수는
-// 올라가므로, 이걸 강점으로 뽑으면 "같은 걸 계속 묻는 신입"이 오히려 칭찬받는 모순이 생긴다.
-const STRENGTH_CANDIDATES = new Set(["depth", "coverage", "alignment"]);
+// 진행도는 높다고 좋은 게 아니라서(체크는 본인이 누르는 자기 신고다) 강점 후보에서 뺀다.
+const STRENGTH_CANDIDATES = new Set(["depth", "coverage", "alignment", "consistency"]);
 
 // 주의 지표가 여럿일 때 무엇을 먼저 말할지. 점수가 가장 낮은 순으로 두면 "질문 깊이 25점"처럼
 // 시간이 지나면 자연히 나아지는 지표가 "완료한 업무를 3번씩 다시 묻는다" 같은 당장 손봐야 할
 // 문제보다 앞에 온다. 사수가 이번 주에 개입해야 하는 순서대로 고정한다.
-const URGENCY = ["alignment", "continuity", "coverage", "progress", "depth"];
+const URGENCY = ["consistency", "alignment", "coverage", "progress", "depth"];
 const byUrgency = (a, b) => URGENCY.indexOf(a.key) - URGENCY.indexOf(b.key);
 
 export function statusOf(score) {
@@ -91,10 +90,10 @@ export function buildActions({ report, score, chapters, checklist, assignedAt })
       const more = missing.length > 2 ? ` 외 ${missing.length - 2}개` : "";
       return `${names}${more} 업무는 한 번도 묻지 않았습니다. 이 업무를 짧게 소개해주세요.`;
     },
-    continuity: () => {
-      const s = data.silence_risk || {};
-      if (s.first_half_questions === undefined) return null;
-      return `질문이 기간 앞쪽 ${s.first_half_questions}건에서 뒤쪽 ${s.second_half_questions}건으로 줄었습니다. 막힌 곳이 없는지 먼저 물어봐주세요.`;
+    consistency: () => {
+      const { workdays, activeDays } = score.detail || {};
+      if (!workdays) return null;
+      return `배정 후 평일 ${workdays}일 중 ${activeDays}일만 질문이나 체크리스트 진행이 있었습니다. 막힌 곳이 없는지 먼저 물어봐주세요.`;
     },
     progress: () => {
       const pending = (checklist || []).filter((item) => {

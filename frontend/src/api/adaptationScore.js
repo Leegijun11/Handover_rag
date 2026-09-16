@@ -40,12 +40,12 @@ export const SCORE_AXES = [
     concern: "완료로 체크한 업무를 이후에도 다시 묻고 있습니다.",
   },
   {
-    key: "continuity",
-    label: "질문 지속성",
-    formula: "기간 뒤쪽 절반 질문 ÷ 앞쪽 절반 질문 (최대 100)",
-    meaning: "질문이 끊기지 않고 이어지는지",
-    strength: "질문이 끊기지 않고 꾸준히 이어집니다.",
-    concern: "기간 뒤쪽 절반에 질문이 크게 줄었습니다.",
+    key: "consistency",
+    label: "활동 꾸준함",
+    formula: "질문하거나 체크리스트를 완료한 날 ÷ 기대 활동일 (평일의 60%, 주 3일 기준)",
+    meaning: "손을 놓지 않고 계속 붙어 있는지",
+    strength: "기간 내내 꾸준히 들어와서 쓰고 있습니다.",
+    concern: "질문도 체크리스트 진행도 며칠째 없습니다.",
   },
   {
     key: "progress",
@@ -59,13 +59,34 @@ export const SCORE_AXES = [
 
 const pct = (ratio) => Math.round(Math.max(0, Math.min(1, ratio)) * 100);
 
+// 주 3일. 매일 물어야 정상인 서비스는 아니라서, 이 정도 활동이면 만점으로 둔다 — 적응해서
+// 질문이 줄어든 신입이 낮은 점수를 받으면 지표가 거꾸로 읽힌다.
+const EXPECTED_ACTIVE_RATIO = 0.6;
+const DAY = 86400000;
+
+const dayKey = (date) => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+
+/** start~end 사이 평일 수. 주말에 질문이 없는 것은 정상이라 분모에서 뺀다. */
+function workdaysBetween(start, end) {
+  let count = 0;
+  const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  while (cursor <= last) {
+    const day = cursor.getDay();
+    if (day !== 0 && day !== 6) count += 1;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return count;
+}
+
 /**
  * @param report    AdaptationReport (sections 포함)
  * @param chapters  배정 문서의 DocumentChapter 목록
  * @param checklist 신입의 ChecklistItem 목록
- * @returns {{ axes: Record<string, number|null>, basis: Record<string, string>, total: number|null }}
+ * @param chatTimes 질문 시각 목록(Date) — 활동 꾸준함 계산용. 없으면 그 축만 null
+ * @returns {{ axes, basis, detail, total }}
  */
-export function computeAdaptationScore(report, chapters, checklist) {
+export function computeAdaptationScore(report, chapters, checklist, chatTimes) {
   const data = Object.fromEntries(
     (report?.sections || []).map((s) => [s.signal_type, s.data || {}]),
   );
@@ -74,15 +95,28 @@ export function computeAdaptationScore(report, chapters, checklist) {
   const questions = growth.total || 0;
   const heat = data.chapter_heatmap?.counts || {};
   const gapItems = data.gap_task?.gap_items || [];
-  const silence = data.silence_risk || {};
 
   // 체크리스트는 현재 상태를 받아오므로, 리포트 기간이 끝난 시점까지 완료한 것만 센다.
   // 항목에 생성 시각이 없어 기간 이후에 추가된 항목도 분모(전체)에 들어간다 — 알려진 한계.
+  const periodStart = parseServerDate(report?.period_start);
   const periodEnd = parseServerDate(report?.period_end);
   const done = (checklist || []).filter((item) => {
     const at = parseServerDate(item.completed_at);
     return at && periodEnd && at <= periodEnd;
   });
+
+  // 활동한 날 = 질문을 했거나 체크리스트를 완료한 날. 질문 대신 스스로 진행한 신입도
+  // 활동으로 센다 — 질문 수만 세면 "질문이 많을수록 좋다"는 잘못된 신호가 된다.
+  const activeDays = new Set();
+  (chatTimes || []).forEach((t) => {
+    if (periodStart && periodEnd && t >= periodStart && t <= periodEnd) activeDays.add(dayKey(t));
+  });
+  done.forEach((item) => {
+    const at = parseServerDate(item.completed_at);
+    if (at && periodStart && at >= periodStart) activeDays.add(dayKey(at));
+  });
+  const workdays = periodStart && periodEnd ? workdaysBetween(periodStart, periodEnd) : 0;
+  const expectedDays = Math.max(1, Math.round(workdays * EXPECTED_ACTIVE_RATIO));
 
   // 소분류에 달린 질문은 그 대분류로 묶어서 센다.
   const parentOf = new Map(chapters.map((c) => [c.chapter_id, c.parent_id || c.chapter_id]));
@@ -117,9 +151,7 @@ export function computeAdaptationScore(report, chapters, checklist) {
               done.length,
         )
       : null,
-    continuity: silence.first_half_questions
-      ? pct(silence.second_half_questions / silence.first_half_questions)
-      : null,
+    consistency: chatTimes && workdays ? pct(activeDays.size / expectedDays) : null,
     progress: checklist?.length ? pct(done.length / checklist.length) : null,
   };
 
@@ -128,17 +160,17 @@ export function computeAdaptationScore(report, chapters, checklist) {
     depth: `질문 ${questions}건 기준`,
     coverage: `대분류 ${tops.size}개 중 ${touched.size}개`,
     alignment: `완료 ${done.length}개 기준`,
-    continuity:
-      silence.first_half_questions !== undefined
-        ? `앞 ${silence.first_half_questions}건 → 뒤 ${silence.second_half_questions}건`
-        : "기간 내 질문 없음",
+    consistency: workdays ? `평일 ${workdays}일 중 ${activeDays.size}일 활동` : "기간 정보 없음",
     progress: `${done.length} / ${(checklist || []).length}개 완료`,
   };
+
+  // 권장 조치 문장이 근거 숫자를 그대로 쓸 수 있게 따로 넘긴다.
+  const detail = { workdays, expectedDays, activeDays: activeDays.size, questions };
 
   const values = Object.values(axes).filter((v) => v !== null);
   const total = values.length
     ? Math.round(values.reduce((sum, v) => sum + v, 0) / values.length)
     : null;
 
-  return { axes, basis, total };
+  return { axes, basis, detail, total };
 }

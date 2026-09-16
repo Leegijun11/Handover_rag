@@ -18,7 +18,7 @@ import {
 import { getChatLogs } from "../../services/router/chat";
 import { generateReport, getReportHistory } from "../../services/router/report";
 import NewcomerPicker from "../../components/hr/NewcomerPicker";
-import { DonutChart, QuestionTimeline, RadarChart } from "../../components/hr/ReportCharts";
+import { ActivityTimeline, DonutChart, RadarChart, ShareBar } from "../../components/hr/ReportCharts";
 import Button from "../../components/common/Button";
 
 /**
@@ -47,37 +47,6 @@ const QUESTION_TYPE_LABEL = {
 // report.py의 MIN_REGENERATE_INTERVAL과 같은 값. 이 시간 안에 다시 부르면 서버가 429를 준다.
 const REGENERATE_LOCK_MS = 5 * 60 * 1000;
 
-/** 질문 유형 4개를 가로 막대로. 지난 리포트 값은 괄호로 곁들인다. */
-function TypeBars({ counts, previousCounts }) {
-  const entries = Object.entries(QUESTION_TYPE_LABEL).map(([key, label]) => ({
-    label,
-    value: counts[key] || 0,
-    previous: previousCounts ? previousCounts[key] || 0 : null,
-  }));
-  const max = entries.reduce((m, e) => Math.max(m, e.value), 0);
-  if (max === 0) {
-    return <div className="empty" style={{ padding: 16 }}>기간 내 질문 없음</div>;
-  }
-  return (
-    <div className="bars">
-      {entries.map((e) => (
-        <div className="bar-row" key={e.label}>
-          <div className="bar-head">
-            <span className="bar-label">{e.label}</span>
-            <span className="num">
-              {e.value}건
-              {e.previous !== null && <span className="bar-prev"> (지난 리포트 {e.previous}건)</span>}
-            </span>
-          </div>
-          <span className="bar">
-            <i style={{ width: `${Math.round((e.value / max) * 100)}%` }} />
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function Delta({ value }) {
   if (value === null || value === undefined) return <span className="delta none">—</span>;
   if (value === 0) return <span className="delta flat">변화 없음</span>;
@@ -96,8 +65,15 @@ function MetricEvidence({ axisKey, report, previousReport, chapters, checklist, 
   const data = Object.fromEntries((report.sections || []).map((s) => [s.signal_type, s.data || {}]));
 
   if (axisKey === "depth") {
-    const prev = (previousReport?.sections || []).find((s) => s.signal_type === "growth_curve");
-    return <TypeBars counts={data.growth_curve?.counts || {}} previousCounts={prev?.data?.counts} />;
+    const counts = data.growth_curve?.counts || {};
+    return (
+      <ShareBar
+        entries={Object.entries(QUESTION_TYPE_LABEL).map(([key, label]) => ({
+          label,
+          value: counts[key] || 0,
+        }))}
+      />
+    );
   }
 
   if (axisKey === "coverage") {
@@ -150,26 +126,17 @@ function MetricEvidence({ axisKey, report, previousReport, chapters, checklist, 
     );
   }
 
-  if (axisKey === "continuity") {
-    const silence = data.silence_risk || {};
+  if (axisKey === "consistency") {
     const start = parseServerDate(report.period_start);
     const end = parseServerDate(report.period_end);
-    if (silence.first_half_questions === undefined) {
-      return <div className="empty" style={{ padding: 16 }}>기간 내 질문 없음</div>;
-    }
+    const { done } = splitChecklist(report, checklist);
     return (
-      <>
-        <QuestionTimeline
-          times={chatTimes.filter((t) => t >= start && t <= end)}
-          start={start}
-          end={end}
-          dropped={silence.dropped_sharply}
-        />
-        <p className="evidence-note">
-          점선 앞 {silence.first_half_questions}건 · 뒤 {silence.second_half_questions}건 — 뒤쪽이
-          앞쪽의 30% 이하로 줄면 급감으로 봅니다.
-        </p>
-      </>
+      <ActivityTimeline
+        questionTimes={chatTimes.filter((t) => t >= start && t <= end)}
+        doneTimes={done.map((item) => parseServerDate(item.completed_at)).filter(Boolean)}
+        start={start}
+        end={end}
+      />
     );
   }
 
@@ -203,7 +170,7 @@ const SIGNAL_OF_AXIS = {
   depth: "growth_curve",
   coverage: "chapter_heatmap",
   alignment: "gap_task",
-  continuity: "silence_risk",
+  // 활동 꾸준함은 서버 신호가 아니라 화면에서 계산하므로 해석 문장이 없다.
 };
 
 /**
@@ -226,8 +193,10 @@ function ReportDetail({
   chapterTitleOf,
   onBack,
 }) {
-  const current = computeAdaptationScore(report, chapters, checklist);
-  const previous = previousReport ? computeAdaptationScore(previousReport, chapters, checklist) : null;
+  const current = computeAdaptationScore(report, chapters, checklist, chatTimes);
+  const previous = previousReport
+    ? computeAdaptationScore(previousReport, chapters, checklist, chatTimes)
+    : null;
   const totalDelta =
     previous && previous.total !== null && current.total !== null ? current.total - previous.total : null;
 
@@ -386,9 +355,12 @@ function ReportDetail({
           표시합니다. 종합 점수는 계산할 수 있는 지표의 평균이며 데이터가 없는 지표는 빠집니다.
           배정 후 2주가 안 됐으면 종합 점수는 참고용으로 표시하고, 질문 깊이·업무 범위·진행도는
           60점 미만이어도 주의 대신 관찰 중으로 두며 권장 조치와 잘하고 있는 점에도 넣지 않습니다 —
-          초반엔 사실 확인 질문이 많고 일부 업무만 묻는 게 정상이기 때문입니다. 체크리스트에는 생성 시각이 없어 분석 기간 이후 추가된 항목도
-          진행도의 전체 항목 수에 들어갑니다. 점수는 적응 상태를 살피기 위한 참고 지표이며 평가
-          용도가 아닙니다.
+          초반엔 사실 확인 질문이 많고 일부 업무만 묻는 게 정상이기 때문입니다. 활동 꾸준함은 매일
+          질문해야 만점인 지표가 아니라, 평일의 60%(주 3일)에 질문이나 체크리스트 진행이 있으면
+          100점입니다 — 체크리스트 완료도 활동으로 세므로 질문 대신 스스로 진행한 경우도 반영됩니다.
+          체크리스트에는 생성 시각이 없어 분석 기간 이후 추가된 항목도 진행도의 전체 항목 수에
+          들어갑니다. 체크리스트 완료는 신입 본인이 누르는 자기 점검이라 검증된 값은 아닙니다.
+          점수는 적응 상태를 살피기 위한 참고 지표이며 평가 용도가 아닙니다.
         </p>
       </details>
     </article>
