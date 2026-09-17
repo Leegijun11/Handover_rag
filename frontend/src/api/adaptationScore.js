@@ -160,7 +160,9 @@ export function computeAdaptationScore(report, chapters, checklist, chatTimes) {
     depth: `질문 ${questions}건 기준`,
     coverage: `대분류 ${tops.size}개 중 ${touched.size}개`,
     alignment: `완료 ${done.length}개 기준`,
-    consistency: workdays ? `평일 ${workdays}일 중 ${activeDays.size}일 활동` : "기간 정보 없음",
+    consistency: workdays
+      ? `활동 ${activeDays.size}일 · 기대 ${expectedDays}일 (평일 ${workdays}일의 60%)`
+      : "기간 정보 없음",
     progress: `${done.length} / ${(checklist || []).length}개 완료`,
   };
 

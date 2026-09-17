@@ -340,6 +340,15 @@ def at(days_ago: float, hour: int) -> datetime:
     return (NOW - timedelta(days=days_ago)).replace(hour=hour, minute=0)
 
 
+def at_workday(days_ago: int, hour: int) -> datetime:
+    """주말이면 직전 평일로 당긴다 — 질문은 평일에만 넣는데 체크리스트 완료만 토·일에 찍히면
+    리포트 달력에서 주말에만 활동한 날처럼 보인다."""
+    when = at(days_ago, hour)
+    while when.weekday() >= 5:
+        when -= timedelta(days=1)
+    return when
+
+
 def parse_file(path):
     from routers.document import _parse_chapters_from_text
 
@@ -433,7 +442,7 @@ def build_plan(spec):
                 "title": title,
                 "chapter_title": by_role[role]["title"],
                 "source": "manual" if kind == "read" else "ai_draft",
-                "completed_at": at(done_days, 17) if done_days is not None else None,
+                "completed_at": at_workday(done_days, 17) if done_days is not None else None,
             })
 
         logs = build_logs(arch, take, by_role)

@@ -18,7 +18,7 @@ import {
 import { getChatLogs } from "../../services/router/chat";
 import { generateReport, getReportHistory } from "../../services/router/report";
 import NewcomerPicker from "../../components/hr/NewcomerPicker";
-import { ActivityTimeline, DonutChart, RadarChart, ShareBar } from "../../components/hr/ReportCharts";
+import { ActivityCalendar, DonutChart, RadarChart, ShareBar } from "../../components/hr/ReportCharts";
 import Button from "../../components/common/Button";
 
 /**
@@ -131,7 +131,7 @@ function MetricEvidence({ axisKey, report, previousReport, chapters, checklist, 
     const end = parseServerDate(report.period_end);
     const { done } = splitChecklist(report, checklist);
     return (
-      <ActivityTimeline
+      <ActivityCalendar
         questionTimes={chatTimes.filter((t) => t >= start && t <= end)}
         doneTimes={done.map((item) => parseServerDate(item.completed_at)).filter(Boolean)}
         start={start}

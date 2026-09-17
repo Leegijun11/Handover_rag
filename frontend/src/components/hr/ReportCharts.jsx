@@ -304,14 +304,13 @@ export function ShareBar({ entries }) {
   );
 }
 
-/* ── 날짜별 활동 ──────────────────────────────────────────────────
-   "손을 놓지 않고 붙어 있는가"는 합계 숫자로는 안 보인다. 날짜별로 질문과 체크리스트 완료를
-   쌓아 올려서, 어느 날부터 조용해졌는지를 사수가 눈으로 찾게 한다. 기간을 반으로 가르는
-   기준선은 두지 않는다 — 그 경계는 설명이 필요한 개념이라 사수에게 와닿지 않는다. */
+/* ── 날짜별 활동 달력 ─────────────────────────────────────────────
+   "손을 놓지 않고 붙어 있는가"는 막대 높이보다 "어느 날에 들어왔나"가 답이다. 그래서 막대그래프
+   대신 달력으로 그린다 — 날짜가 전부 적히고, 활동이 없는 날이 빈칸으로 남아 조용해진 구간이
+   바로 보인다. 칸 색은 그날 질문 수, 오른쪽 위 점은 그날 체크리스트를 완료했다는 표시다. */
 
-const TL = { w: 640, h: 170, left: 30, right: 10, top: 14, bottom: 26 };
 const DAY = 86400000;
-const MIN_AXIS_MAX = 3; // 하루 1건짜리 막대가 꽉 차 보이지 않게 세로축 최소 눈금
+const WEEKDAY_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
 
 function localMidnight(date) {
   const d = new Date(date);
@@ -319,116 +318,93 @@ function localMidnight(date) {
   return d;
 }
 
-export function ActivityTimeline({ questionTimes, doneTimes, start, end }) {
+/** 월요일 시작으로 맞춘 요일 번호 (월 0 … 일 6) */
+const weekdayIndex = (date) => (date.getDay() + 6) % 7;
+
+export function ActivityCalendar({ questionTimes, doneTimes, start, end }) {
   if (!start || !end) return null;
 
-  const firstDay = localMidnight(start);
-  const days = Math.max(1, Math.round((localMidnight(end) - firstDay) / DAY) + 1);
-  // 기간이 한 달을 넘으면 막대가 가늘어져 읽히지 않으므로 주 단위로 묶는다.
-  const step = days > 31 ? 7 : 1;
-  const buckets = Math.ceil(days / step);
-  const questions = new Array(buckets).fill(0);
-  const dones = new Array(buckets).fill(0);
-  const put = (arr, t) => {
-    const index = Math.floor((localMidnight(t) - firstDay) / DAY / step);
-    if (index >= 0 && index < buckets) arr[index] += 1;
-  };
-  (questionTimes || []).forEach((t) => put(questions, t));
-  (doneTimes || []).forEach((t) => put(dones, t));
+  const first = localMidnight(start);
+  const last = localMidnight(end);
+  const key = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
-  const plotW = TL.w - TL.left - TL.right;
-  const plotH = TL.h - TL.top - TL.bottom;
-  const slot = plotW / buckets;
-  const barW = Math.max(3, Math.min(28, slot - 4));
-  const max = Math.max(MIN_AXIS_MAX, ...questions.map((q, i) => q + dones[i]));
-  const baseY = TL.top + plotH;
+  const questions = new Map();
+  const dones = new Map();
+  const tally = (map, times) =>
+    (times || []).forEach((t) => {
+      const day = localMidnight(t);
+      if (day < first || day > last) return;
+      map.set(key(day), (map.get(key(day)) || 0) + 1);
+    });
+  tally(questions, questionTimes);
+  tally(dones, doneTimes);
 
+  // 첫 주의 월요일부터 마지막 주의 일요일까지 채운다 — 요일 열이 어긋나면 달력으로 안 읽힌다.
+  const gridStart = new Date(first.getTime() - weekdayIndex(first) * DAY);
+  const gridEnd = new Date(last.getTime() + (6 - weekdayIndex(last)) * DAY);
+  const weeks = [];
+  for (let cursor = gridStart; cursor <= gridEnd; cursor = new Date(cursor.getTime() + 7 * DAY)) {
+    weeks.push(
+      Array.from({ length: 7 }, (_, i) => {
+        const date = new Date(cursor.getTime() + i * DAY);
+        const inPeriod = date >= first && date <= last;
+        return {
+          date,
+          inPeriod,
+          questions: inPeriod ? questions.get(key(date)) || 0 : 0,
+          done: inPeriod ? dones.get(key(date)) || 0 : 0,
+        };
+      }),
+    );
+  }
+
+  const level = (count) => (count === 0 ? 0 : count <= 1 ? 1 : count <= 3 ? 2 : 3);
   const md = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
-  const bucketDate = (i) => new Date(firstDay.getTime() + i * step * DAY);
-  const isWeekend = (i) => step === 1 && [0, 6].includes(bucketDate(i).getDay());
 
   return (
-    <div className="timeline">
-      <svg viewBox={`0 0 ${TL.w} ${TL.h}`} role="img" aria-label="날짜별 질문과 체크리스트 완료">
-        <line x1={TL.left} x2={TL.w - TL.right} y1={TL.top} y2={TL.top} stroke={GRID} strokeWidth="1" />
-        <line x1={TL.left} x2={TL.w - TL.right} y1={baseY} y2={baseY} stroke="#cdd3da" strokeWidth="1" />
-        <text x={TL.left - 6} y={TL.top} textAnchor="end" dominantBaseline="middle" className="chart-axis">
-          {max}
-        </text>
-        <text x={TL.left - 6} y={baseY} textAnchor="end" dominantBaseline="middle" className="chart-axis">
-          0
-        </text>
-
-        {/* 주말은 질문이 없는 게 정상이라 옅게 칠해서 "끊긴 날"과 구분한다 */}
-        {questions.map((_, i) =>
-          isWeekend(i) ? (
-            <rect
-              key={`w${i}`}
-              x={(TL.left + slot * i).toFixed(1)}
-              y={TL.top}
-              width={slot.toFixed(1)}
-              height={plotH.toFixed(1)}
-              fill="#f2f4f7"
-            />
-          ) : null,
-        )}
-
-        {questions.map((count, i) => {
-          const done = dones[i];
-          if (!count && !done) return null;
-          const x = TL.left + slot * i + (slot - barW) / 2;
-          const qh = count ? Math.max(2, (count / max) * plotH) : 0;
-          const dh = done ? Math.max(2, (done / max) * plotH) : 0;
-          const label = `${md(bucketDate(i))}${step > 1 ? " 주" : ""} 질문 ${count}건${
-            done ? ` · 체크리스트 완료 ${done}개` : ""
-          }`;
+    <div className="cal">
+      <div className="cal-grid">
+        {WEEKDAY_LABELS.map((label) => (
+          <span className="cal-head" key={label}>
+            {label}
+          </span>
+        ))}
+        {weeks.flat().map((cell) => {
+          const weekend = weekdayIndex(cell.date) >= 5;
+          const classes = ["cal-cell"];
+          if (!cell.inPeriod) classes.push("out");
+          else {
+            if (weekend) classes.push("weekend");
+            if (cell.questions) classes.push(`lv${level(cell.questions)}`);
+            if (cell.done) classes.push("done");
+          }
+          const title = cell.inPeriod
+            ? `${md(cell.date)} 질문 ${cell.questions}건${cell.done ? ` · 체크리스트 완료 ${cell.done}개` : ""}`
+            : "";
           return (
-            <g key={i}>
-              {qh > 0 && (
-                <rect
-                  x={x.toFixed(1)}
-                  y={(baseY - qh).toFixed(1)}
-                  width={barW.toFixed(1)}
-                  height={qh.toFixed(1)}
-                  rx="3"
-                  fill={CHART_COLORS[0]}
-                >
-                  <title>{label}</title>
-                </rect>
-              )}
-              {dh > 0 && (
-                <rect
-                  x={x.toFixed(1)}
-                  y={(baseY - qh - dh).toFixed(1)}
-                  width={barW.toFixed(1)}
-                  height={dh.toFixed(1)}
-                  rx="3"
-                  fill={CHART_COLORS[5]}
-                >
-                  <title>{label}</title>
-                </rect>
-              )}
-            </g>
+            <span className={classes.join(" ")} key={cell.date.getTime()} title={title}>
+              <b>{cell.date.getDate()}</b>
+              {cell.inPeriod && cell.questions > 0 && <i className="cal-num">{cell.questions}</i>}
+            </span>
           );
         })}
-
-        <text x={TL.left} y={TL.h - 6} textAnchor="start" className="chart-axis">
-          {md(start)}
-        </text>
-        <text x={TL.w - TL.right} y={TL.h - 6} textAnchor="end" className="chart-axis">
-          {md(end)}
-        </text>
-      </svg>
-      <div className="chart-legend">
+      </div>
+      <div className="chart-legend cal-legend">
         <span>
-          <i style={{ background: CHART_COLORS[0] }} />
-          질문
+          <i className="cal-swatch lv0" /> 활동 없음
         </span>
         <span>
-          <i style={{ background: CHART_COLORS[5] }} />
-          체크리스트 완료
+          <i className="cal-swatch lv1" /> 질문 1건
         </span>
-        <span className="chart-scale">옥은 칸 = 주말</span>
+        <span>
+          <i className="cal-swatch lv2" /> 2~3건
+        </span>
+        <span>
+          <i className="cal-swatch lv3" /> 4건 이상
+        </span>
+        <span>
+          <i className="cal-swatch done" /> 체크리스트 완료
+        </span>
       </div>
     </div>
   );
