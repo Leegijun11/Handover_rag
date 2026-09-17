@@ -252,7 +252,7 @@ function AssignPage() {
                       disabled={viewingId === row.document_id}
                       onClick={() => openDocument(row.document_id)}
                     >
-                      {viewingId === row.document_id ? "여는 중…" : "본문 보기"}
+                      {viewingId === row.document_id ? "여는 중…" : "인수인계서 보기"}
                     </Button>{" "}
                     <Button
                       size="sm"

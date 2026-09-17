@@ -428,6 +428,29 @@ function ReportPage() {
   const [now, setNow] = useState(() => Date.now());
   // 목록 -> 상세. selectedReport가 있으면 상세를 보여준다.
   const [selectedReport, setSelectedReport] = useState(null);
+
+  /**
+   * 목록↔상세는 라우트가 아니라 상태라, 상세에서 브라우저 뒤로가기를 누르면 리포트 화면
+   * 자체를 벗어났다. 상세를 열 때 히스토리 항목을 하나 쌓고 뒤로가기를 목록 복귀로 받는다.
+   */
+  function openReport(row) {
+    window.history.pushState({ reportDetail: true }, "");
+    setSelectedReport(row);
+  }
+
+  function closeReport() {
+    // 뒤로가기로 닫히면 popstate가 먼저 오므로, 그때는 히스토리를 또 되감지 않는다.
+    if (window.history.state?.reportDetail) window.history.back();
+    else setSelectedReport(null);
+  }
+
+  useEffect(() => {
+    function onPopState() {
+      setSelectedReport(null);
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
   // 기간 기본값은 "지난 리포트 이후"지만, 그 사이 질문이 없으면 빈 리포트가 나온다.
   // 사수가 기간을 바꿔서 다시 만들 수 있게 고르는 칸을 둔다.
   const [periodKind, setPeriodKind] = useState("since-last");
@@ -561,7 +584,7 @@ function ReportPage() {
       const { data } = await getReportHistory(newcomerId);
       setHistory(data || []);
       // 방금 만든 걸 바로 상세로 보여준다 — 목록에서 한 번 더 찾아 누르게 하지 않는다.
-      setSelectedReport(data?.[0] || null);
+      openReport(data?.[0] || null);
       setNow(Date.now());
     } catch (err) {
       setError(err.userMessage || "리포트를 만들지 못했습니다");
@@ -603,7 +626,7 @@ function ReportPage() {
               mentorName={mentor?.name}
               documentLabel={documents.find((d) => d.document_id === documentId)?.label}
               chapterTitleOf={chapterTitleOf}
-              onBack={() => setSelectedReport(null)}
+              onBack={closeReport}
             />
           ) : (
             <>
@@ -689,7 +712,7 @@ function ReportPage() {
                           </td>
                           <td style={{ textAlign: "right" }}>
                             <div className="actions actions-end" style={{ margin: 0 }}>
-                              <Button size="sm" onClick={() => setSelectedReport(row)}>
+                              <Button size="sm" onClick={() => openReport(row)}>
                                 자세히 보기
                               </Button>
                               <Button

@@ -44,6 +44,7 @@ function ChapterViewer({ chapters, chapterId, answer, onClose }) {
   const [activeId, setActiveId] = useState(chapterId);
   const markRef = useRef(null);
   const bodyRef = useRef(null);
+  const dialogRef = useRef(null);
 
   const active = chapters.find((c) => c.chapter_id === activeId) || chapters[0] || null;
 
@@ -65,12 +66,37 @@ function ChapterViewer({ chapters, chapterId, answer, onClose }) {
 
   const hasMatch = paragraphs.some((p) => p.matched);
 
+  // Esc로 닫고, Tab이 모달 밖으로 새지 않게 가둔다. 닫은 뒤에는 열기 전에 눌렀던 버튼으로
+  // 포커스를 돌려준다 — 키보드로 쓰면 모달을 닫는 순간 포커스가 문서 맨 위로 튄다.
   useEffect(() => {
+    const opener = document.activeElement;
+
     function onKeyDown(e) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab" || !dialogRef.current) return;
+      const focusable = dialogRef.current.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
+
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      if (opener instanceof HTMLElement) opener.focus();
+    };
   }, [onClose]);
 
   // 하이라이트된 문단이 화면 밖에 있으면 거기로 옮겨준다. 긴 업무일수록 이게 없으면
@@ -90,6 +116,7 @@ function ChapterViewer({ chapters, chapterId, answer, onClose }) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
+        ref={dialogRef}
         className="modal modal-wide"
         role="dialog"
         aria-modal="true"

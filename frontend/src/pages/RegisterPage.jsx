@@ -175,7 +175,7 @@ function RegisterPage() {
                   checked={form.role === "newcomer"}
                   onChange={update("role")}
                 />
-                신입사원
+                신입
               </label>
               <label>
                 <input

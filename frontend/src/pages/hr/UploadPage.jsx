@@ -155,14 +155,14 @@ function UploadPage() {
       {error && <div className="banner banner-error">{error}</div>}
 
       {/* 목차를 못 찾으면 서버가 문서 전체를 "전체 내용" 업무 하나로 저장한다.
-          답변은 되지만 리포트의 영역별 히트맵이 막대 하나가 되어 신호가 죽는다.
+          답변은 되지만 리포트의 업무 범위가 업무 하나짜리가 되어 신호가 죽는다.
           사수가 그걸 알고 나눠 쓸 수 있게 여기서 짚어준다. */}
       {result && result.mode === "file" && (result.chapters?.length ?? 0) <= 1 ? (
         <div className="banner banner-warn">
           <div>
             <b>목차를 인식하지 못해 문서 전체를 업무 하나로 저장했습니다.</b>
             <br />
-            챗봇 답변은 정상적으로 되지만, 업무 구분이 없어 적응도 리포트의 <b>영역별 히트맵</b>을
+            챗봇 답변은 정상적으로 되지만, 업무 구분이 없어 적응도 리포트의 <b>업무 범위</b>를
             읽을 수 없습니다. 파일에 <code>#</code> 제목이나 <code>1.</code> · <code>제1장</code>{" "}
             같은 번호가 있으면 자동으로 나뉩니다.
             <div className="actions" style={{ marginTop: 10 }}>
@@ -174,7 +174,7 @@ function UploadPage() {
               >
                 표준 양식으로 나눠 다시 올리기
               </Button>
-              <Button onClick={() => setReviewing(true)}>저장된 본문 확인</Button>
+              <Button onClick={() => setReviewing(true)}>인수인계서 보기</Button>
             </div>
           </div>
         </div>
@@ -188,7 +188,7 @@ function UploadPage() {
                   방법이 여기 말고는 없다. 배정하기 전에 한 번 보고 넘어가게 한다. */}
               <div className="actions" style={{ marginTop: 10 }}>
                 <Button size="sm" onClick={() => setReviewing(true)}>
-                  저장된 본문 확인
+                  인수인계서 보기
                 </Button>
               </div>
             </div>
