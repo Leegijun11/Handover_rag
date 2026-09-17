@@ -57,7 +57,10 @@ Three people are building this in parallel against the frozen specs in `guidelin
 
 - Backend: `uvicorn main:app --reload` from `backend/`, fixed port `8000`.
 - Env vars (see `guidelines/5_기술스택_폴더구조.md` §5-4 for the full list): `OPENAI_API_KEY`, `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`, `CHROMA_PERSIST_DIR`, `JWT_SECRET_KEY`, `JWT_EXPIRE_MINUTES`, `DEMO_USER_IDS`. Real values go in `.env` (gitignored); only `.env.example` is committed. An empty `JWT_SECRET_KEY=` line in `.env` is treated the same as unset (falls back to a dev default with a logged warning) — don't assume a blank value means "disabled".
-- No test suite or lint config exists yet in this repo — check `backend/requirements.txt` / `frontend/package.json` once they're added rather than assuming a framework.
+- Backend tests: `pytest` (added 9/14–9/15, guidelines 5-10) — two separate suites:
+  - `cd backend && pytest unit_test/` — pure-logic functions and OpenAI/ChromaDB-mocked node functions, split into `chat/`/`checklist/`/`document/`/`report/`/`user/` subfolders. No live MySQL/OpenAI needed.
+  - `cd backend && pytest integration_test/` — `TestClient` hitting the real local MySQL (`.env` as-is, no separate test DB — deliberately, this project has no CI and each dev already has their own local DB); only genuinely paid external calls (OpenAI) are still `monkeypatch`-mocked. Requires local MySQL to be running. Covers the auth flow end to end and the cross-mentor ownership checks (report/chat log access, reassignment behavior) — not full endpoint coverage.
+  Neither suite is full coverage. No frontend test suite or lint config exists yet — check `frontend/package.json` once one is added rather than assuming a framework.
 
 ## Conventions specific to this repo
 
