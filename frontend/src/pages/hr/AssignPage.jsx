@@ -145,13 +145,13 @@ function AssignPage() {
         <div className="row-2">
           <Field
             label="신입사원 ID"
-            hint="신입 본인에게 받아서 입력하세요"
+            hint="신입이 자기 화면 오른쪽 위 '내 ID 복사'로 보내준 값을 붙여넣으세요"
           >
             {(props) => (
               <input
                 {...props}
                 type="text"
-                placeholder="예: 3f2b9c14-…"
+                placeholder="신입에게 받은 ID 붙여넣기"
                 value={newcomerId}
                 onChange={(e) => setNewcomerId(e.target.value)}
               />
@@ -185,7 +185,7 @@ function AssignPage() {
                 <input
                   {...props}
                   type="text"
-                  placeholder="document_id"
+                  placeholder="문서 ID 붙여넣기"
                   value={documentId}
                   onChange={(e) => setDocumentId(e.target.value)}
                 />

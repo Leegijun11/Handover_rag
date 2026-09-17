@@ -47,6 +47,19 @@ function AppShell({ children }) {
 
   // DemoPage.jsx의 데모 계정 이메일 도메인
   const isDemoAccount = Boolean(user?.email?.endsWith("@handover.demo"));
+  const [idCopied, setIdCopied] = useState(false);
+
+  /** 사수가 배정 화면에 넣어야 하는 값이 신입의 user_id인데, 신입이 그걸 볼 데가 없었다. */
+  async function handleCopyId() {
+    try {
+      await navigator.clipboard.writeText(user.user_id);
+    } catch {
+      // 클립보드를 막아둔 브라우저에서는 값이라도 보이게 한다
+      window.prompt("이 ID를 사수에게 보내세요", user.user_id);
+    }
+    setIdCopied(true);
+    setTimeout(() => setIdCopied(false), 2000);
+  }
 
   async function handleDeleteAccount() {
     if (!window.confirm("정말 탈퇴하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) return;
@@ -77,6 +90,11 @@ function AppShell({ children }) {
           <b>{user?.name}</b> 님
           {user?.role === "mentor" ? " · 사수" : mentorName ? ` · 사수 ${mentorName}` : ""}
         </span>
+        {user?.role === "newcomer" && user?.user_id && (
+          <Button size="sm" onClick={handleCopyId}>
+            {idCopied ? "복사됨" : "내 ID 복사"}
+          </Button>
+        )}
         {deleteError && (
           <span className="hint" style={{ color: "var(--danger)" }}>
             {deleteError}

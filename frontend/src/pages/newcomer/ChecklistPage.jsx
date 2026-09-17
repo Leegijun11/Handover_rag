@@ -149,7 +149,6 @@ function ChecklistPage() {
                     관련 인수인계서 보기
                   </Button>
                 )}
-                {done && !busy && <span className="badge badge-done">완료</span>}
               </li>
             );
           })}
