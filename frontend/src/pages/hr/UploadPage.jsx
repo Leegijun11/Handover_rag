@@ -45,7 +45,15 @@ function UploadPage() {
     setResult(null);
   }
 
+  /** 이미 쓴 내용이 있으면 먼저 묻는다 — 초안을 통째로 덮어쓰는 동작이라 되돌릴 수 없다. */
+  function hasWrittenContent() {
+    return chapters.some((c) => (c.title || "").trim() || (c.content || "").trim());
+  }
+
   function applyTemplate() {
+    if (hasWrittenContent() && !window.confirm("지금 쓴 내용을 표준 양식으로 바꿉니다. 계속할까요?")) {
+      return;
+    }
     setChapters(templateChapters());
     setUsingTemplate(true);
     setError("");
@@ -53,6 +61,9 @@ function UploadPage() {
   }
 
   function clearForm() {
+    if (hasWrittenContent() && !window.confirm("지금 쓴 내용을 모두 지우고 처음부터 씁니다. 계속할까요?")) {
+      return;
+    }
     setChapters([newChapter(), newChapter()]);
     setUsingTemplate(false);
   }
@@ -229,7 +240,7 @@ function UploadPage() {
                 type="file"
                 accept={ACCEPTED}
                 multiple
-                hidden
+                className="sr-only"
                 onChange={(e) => pickFiles(e.target.files)}
               />
               <p>
@@ -317,10 +328,14 @@ function UploadPage() {
                   <div className="actions actions-end" style={{ marginTop: 0 }}>
                     <Button
                       size="sm"
-                      variant="danger"
-                      onClick={() =>
-                        setChapters((prev) => prev.filter((c) => c.key !== chapter.key))
-                      }
+                      onClick={() => {
+                        // 저장 전 초안이라 위험 버튼까지는 아니지만, 쓴 내용이 있으면 먼저 묻는다
+                        const written = (chapter.title || "").trim() || (chapter.content || "").trim();
+                        if (written && !window.confirm("이 업무에 쓴 내용을 지웁니다. 계속할까요?")) {
+                          return;
+                        }
+                        setChapters((prev) => prev.filter((c) => c.key !== chapter.key));
+                      }}
                     >
                       이 업무 삭제
                     </Button>

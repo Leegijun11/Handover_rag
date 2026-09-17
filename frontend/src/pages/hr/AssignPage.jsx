@@ -86,6 +86,19 @@ function AssignPage() {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    // 재배정은 기존 배정을 덮어쓴다 — 그 신입의 챗봇 범위가 바뀌고, 이전 대화의 출처 표시와
+    // 체크리스트의 업무 연결이 끊긴다. 되돌릴 수 없으니 먼저 알린다.
+    const already = rows.find((row) => row.newcomer_id === newcomerId.trim());
+    if (already && already.document_id !== documentId.trim()) {
+      const name = already.newcomerName || "이 신입";
+      if (
+        !window.confirm(
+          `${name}님에게 이미 배정된 인수인계서가 있습니다. 새 문서로 바꾸면 지금까지의 대화 출처 표시와 체크리스트의 업무 연결이 끊깁니다. 바꿀까요?`,
+        )
+      ) {
+        return;
+      }
+    }
     setFormError("");
     setNotice("");
     setSubmitting(true);
@@ -144,7 +157,7 @@ function AssignPage() {
 
         <div className="row-2">
           <Field
-            label="신입사원 ID"
+            label="신입 ID"
             hint="신입이 자기 화면 오른쪽 위 '내 ID 복사'로 보내준 값을 붙여넣으세요"
           >
             {(props) => (
@@ -165,7 +178,7 @@ function AssignPage() {
                 ? "불러오는 중…"
                 : documents.length
                   ? "내가 올린 문서 목록입니다"
-                  : "먼저 인수인계서를 업로드하거나 document_id를 직접 입력하세요"
+                  : "올린 인수인계서가 없습니다. 업로드 화면에서 먼저 등록해주세요"
             }
           >
             {(props) =>
@@ -214,7 +227,7 @@ function AssignPage() {
           <table>
             <thead>
               <tr>
-                <th>신입사원</th>
+                <th>신입</th>
                 <th>배정 문서</th>
                 <th>배정일</th>
                 <th />
@@ -229,7 +242,7 @@ function AssignPage() {
                   </td>
                   <td>
                     {documents.find((d) => d.document_id === row.document_id)?.label || (
-                      <span className="hint">{row.document_id}</span>
+                      <span className="hint">이름을 불러오지 못한 문서</span>
                     )}
                   </td>
                   <td>{formatDate(row.assigned_at)}</td>

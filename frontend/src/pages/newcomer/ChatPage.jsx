@@ -356,6 +356,7 @@ function ChatPage() {
           <input
             type="text"
             id="chat-question"
+          aria-label="인수인계서에 대해 질문하기"
             value={question}
             maxLength={MAX_QUESTION_LENGTH}
             placeholder={sending ? "답변을 기다리는 중입니다" : "예: 정산 마감일이 언제예요?"}

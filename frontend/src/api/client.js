@@ -48,6 +48,11 @@ apiClient.interceptors.request.use((config) => {
  */
 function extractErrorMessage(error) {
   const data = error.response?.data;
+  // 429는 서버가 slowapi의 영문 규칙("10 per 1 minute")을 그대로 붙여 보낸다. 화면마다
+  // 따로 처리하지 않도록 여기서 한 번에 사람이 읽는 문구로 바꾼다.
+  if (error.response?.status === 429) {
+    return "요청이 너무 많습니다. 잠시 뒤에 다시 시도해 주세요";
+  }
   if (!data) {
     // 응답 자체가 없는 경우. 서버가 꺼져 있을 때뿐 아니라, 서버가 500을 보냈는데
     // 브라우저가 CORS로 막았을 때도 여기로 온다 — main.py의 미처리 예외 핸들러는
@@ -68,7 +73,8 @@ function extractErrorMessage(error) {
   if (typeof data.error === "string") {
     return data.error;
   }
-  return error.message || "알 수 없는 오류가 발생했습니다";
+  // axios의 원문(예: "Network Error")은 영문이라 사용자에게 그대로 보이면 안 된다.
+  return "요청을 처리하지 못했습니다. 잠시 뒤에 다시 시도해 주세요";
 }
 
 // 로그인/회원가입 요청 자체. 여기서 나오는 401은 "자격이 틀렸다"는 뜻이지

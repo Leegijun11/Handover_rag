@@ -234,6 +234,13 @@ function ReportDetail({
   const strength = pickStrength(current, early);
   const headline = buildHeadline({ actions, report, assignedAt });
 
+  // 기간 안에 질문도 체크리스트 완료도 없으면 모든 지표가 0이나 빈 값으로 나온다. 그대로
+  // 두면 "적응을 전혀 못 하는 신입"처럼 읽히므로, 점수 대신 기간 문제라고 먼저 알린다.
+  const questionsInPeriod =
+    (report.sections || []).find((s) => s.signal_type === "growth_curve")?.data?.total || 0;
+  const doneInPeriod = splitChecklist(report, checklist).done.length;
+  const emptyPeriod = questionsInPeriod === 0 && doneInPeriod === 0;
+
   const radarAxes = SCORE_AXES.map((axis) => ({
     label: axis.label,
     value: current.axes[axis.key] ?? 0,
@@ -273,7 +280,19 @@ function ReportDetail({
           <span>01</span>요약
         </h5>
 
-        <p className="rpt-verdict">{headline}</p>
+        {emptyPeriod ? (
+          <div className="banner banner-warn">
+            <div>
+              <b>이 기간에는 질문도 체크리스트 진행도 없습니다.</b>
+              <br />
+              {formatDate(report.period_start)} ~ {formatDate(report.period_end)} 사이의 기록만
+              봤기 때문입니다. 아래 점수는 판단 근거가 없으니, 목록으로 돌아가 기간을 "배정일부터
+              지금까지"로 바꿔 다시 만들어보세요.
+            </div>
+          </div>
+        ) : (
+          <p className="rpt-verdict">{headline}</p>
+        )}
 
         <div className="rpt-overview">
           <div className="rpt-score">
@@ -411,6 +430,9 @@ function ReportPage() {
   const [now, setNow] = useState(() => Date.now());
   // 목록 -> 상세. selectedReport가 있으면 상세를 보여준다.
   const [selectedReport, setSelectedReport] = useState(null);
+  // 기간 기본값은 "지난 리포트 이후"지만, 그 사이 질문이 없으면 빈 리포트가 나온다.
+  // 사수가 기간을 바꿔서 다시 만들 수 있게 고르는 칸을 둔다.
+  const [periodKind, setPeriodKind] = useState("since-last");
 
   const newcomerId = assignment?.newcomer_id;
   const documentId = assignment?.document_id;
@@ -508,7 +530,13 @@ function ReportPage() {
       const periodEnd = toServerDate(new Date());
       const previousEnd = latest ? parseServerDate(latest.period_end) : null;
       const assignedAt = parseServerDate(assignment?.assigned_at);
-      const start = previousEnd || assignedAt || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const fallback = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const start =
+        periodKind === "all"
+          ? assignedAt || fallback
+          : periodKind === "recent-2w"
+            ? new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
+            : previousEnd || assignedAt || fallback;
 
       await generateReport(newcomerId, toServerDate(start), periodEnd);
       const { data } = await getReportHistory(newcomerId);
@@ -569,6 +597,18 @@ function ReportPage() {
                   </p>
                 </div>
                 <div className="actions" style={{ margin: 0 }}>
+                  <select
+                    aria-label="리포트 분석 기간"
+                    value={periodKind}
+                    onChange={(e) => setPeriodKind(e.target.value)}
+                    disabled={generating}
+                  >
+                    <option value="since-last">
+                      {latest ? "지난 리포트 이후" : "배정일부터 지금까지"}
+                    </option>
+                    <option value="recent-2w">최근 2주</option>
+                    <option value="all">배정일부터 지금까지</option>
+                  </select>
                   <Button
                     variant="primary"
                     onClick={handleGenerate}
