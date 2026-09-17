@@ -16,7 +16,7 @@ import {
   untouchedChapters,
 } from "../../api/reportInsights";
 import { getChatLogs } from "../../services/router/chat";
-import { generateReport, getReportHistory } from "../../services/router/report";
+import { deleteReport, generateReport, getReportHistory } from "../../services/router/report";
 import NewcomerPicker from "../../components/hr/NewcomerPicker";
 import { ActivityCalendar, DonutChart, RadarChart, ShareBar } from "../../components/hr/ReportCharts";
 import Button from "../../components/common/Button";
@@ -431,6 +431,7 @@ function ReportPage() {
   // 기간 기본값은 "지난 리포트 이후"지만, 그 사이 질문이 없으면 빈 리포트가 나온다.
   // 사수가 기간을 바꿔서 다시 만들 수 있게 고르는 칸을 둔다.
   const [periodKind, setPeriodKind] = useState("since-last");
+  const [deletingId, setDeletingId] = useState("");
 
   const newcomerId = assignment?.newcomer_id;
   const documentId = assignment?.document_id;
@@ -516,6 +517,26 @@ function ReportPage() {
       chapters.find((c) => c.chapter_id === chapterId)?.title ||
       "삭제되었거나 문서가 바뀐 업무"
     );
+  }
+
+  /** 기간 안에 활동이 없어 비어버린 리포트 등, 남겨둘 이유가 없는 기록을 지운다. */
+  async function handleDelete(row) {
+    if (deletingId) return;
+    const when = `${formatDate(row.period_start)} ~ ${formatDate(row.period_end)}`;
+    if (!window.confirm(`${when} 리포트를 삭제할까요? 되돌릴 수 없습니다.`)) return;
+    setDeletingId(row.report_id);
+    setError("");
+    try {
+      await deleteReport(row.report_id);
+      const { data } = await getReportHistory(newcomerId);
+      setHistory(data || []);
+      // 지금 열어둔 리포트를 지웠으면 목록으로 돌아간다 — 없는 리포트를 계속 보여줄 수 없다.
+      setSelectedReport((prev) => (prev?.report_id === row.report_id ? null : prev));
+    } catch (err) {
+      setError(err.userMessage || "리포트를 삭제하지 못했습니다");
+    } finally {
+      setDeletingId("");
+    }
   }
 
   async function handleGenerate() {
@@ -667,9 +688,19 @@ function ReportPage() {
                             {formatDate(row.period_start)} ~ {formatDate(row.period_end)}
                           </td>
                           <td style={{ textAlign: "right" }}>
-                            <Button size="sm" onClick={() => setSelectedReport(row)}>
-                              자세히 보기
-                            </Button>
+                            <div className="actions actions-end" style={{ margin: 0 }}>
+                              <Button size="sm" onClick={() => setSelectedReport(row)}>
+                                자세히 보기
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="danger"
+                                disabled={Boolean(deletingId)}
+                                onClick={() => handleDelete(row)}
+                              >
+                                {deletingId === row.report_id ? "삭제 중…" : "삭제"}
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       ))}

@@ -98,12 +98,14 @@
 | POST | `/report/generate` | `{newcomer_id: str, period_start: datetime, period_end: datetime}` | `AdaptationReport` |
 | GET | `/report/{newcomer_id}` | - | `AdaptationReport` |
 | GET | `/report/{newcomer_id}/history` | - | `list[AdaptationReport]` |
+| DELETE | `/report/{report_id}` (신설) | - | 204 |
 
 **설명**
 - `/report/generate`: 사수가 리포트 생성을 요청하는 시점에 호출. `ChatLog` + `ChecklistItem` 완료 로그를 모아 4개 신호(성장곡선/히트맵/완료-이해 불일치/침묵 위험)를 계산하고, 결과를 `AdaptationReport`로 저장 후 반환
   - `period_start`/`period_end`는 프론트엔드가 기본값을 자동 채워서 보냄: 이전 리포트가 있으면 "이전 리포트의 `period_end` ~ 지금", 처음 생성이면 "Assignment 생성일 ~ 지금". 사수가 원하면 직접 수정 가능
 - `/report/{newcomer_id}`: `generated_at` 기준 가장 최근 리포트 1개 조회
 - `/report/{newcomer_id}/history`: 이 신입에 대해 생성된 모든 리포트를 `generated_at` 내림차순으로 반환 (지난 리포트와 비교할 때 사용)
+- `DELETE /report/{report_id}` (신설, 조장 승인 9/17): 리포트 1건 삭제. **경로 변수가 `newcomer_id`가 아니라 `report_id`** — 한 신입에게 리포트가 여러 건이라 하나를 지목해야 함. 담당 사수만 가능(아니면 403), 없으면 404. 기간 안에 질문·체크리스트 진행이 없으면 모든 신호가 빈 리포트가 만들어지는데 지울 방법이 없어 목록에 남던 문제를 해결하기 위함
 - HR 화면 전용. 신입사원 화면에서는 세 API 모두 호출하지 않음
 
 ---

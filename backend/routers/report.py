@@ -323,6 +323,34 @@ def get_latest_report(
     return _to_schema(row, sections)
 
 
+@router.delete("/report/{report_id}", status_code=204)
+def delete_report(
+    report_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """리포트 1건 삭제 (신설, 조장 승인 9/17).
+
+    기간 안에 활동이 없으면 모든 신호가 빈 리포트가 만들어지는데, 지울 방법이 없어 목록에
+    그대로 남았다. 경로 변수는 newcomer_id가 아니라 report_id다 — 같은 신입의 리포트가 여러
+    건이라 하나를 지목해야 한다.
+
+    삭제는 그 리포트를 만든 사수(= 지금 그 신입을 담당하는 사수)만 할 수 있다. 지난 리포트는
+    적응 과정을 되짚는 기록이라 신입 쪽에는 애초에 조회 권한이 없다(1-2).
+    """
+    require_role(current_user, "mentor")
+
+    report = db.query(AdaptationReportORM).filter_by(report_id=report_id).first()
+    if report is None:
+        raise HTTPException(status_code=404, detail="리포트를 찾을 수 없습니다")
+    _require_mentor_owns_newcomer(db, current_user, report.newcomer_id)
+
+    db.query(ReportSectionORM).filter_by(report_id=report_id).delete(synchronize_session=False)
+    db.delete(report)
+    db.commit()
+    return None
+
+
 @router.get("/report/{newcomer_id}/history")
 def get_report_history(
     newcomer_id: str,
