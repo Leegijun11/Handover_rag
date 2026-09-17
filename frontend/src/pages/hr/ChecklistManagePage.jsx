@@ -395,6 +395,16 @@ function ChecklistManagePage() {
                     </ul>
                     <div className="actions actions-end">
                       <Button
+                        variant="danger"
+                        disabled={busy}
+                        onClick={() => {
+                          setDraft(null);
+                          setDraftKind(null);
+                        }}
+                      >
+                        후보 지우기
+                      </Button>
+                      <Button
                         onClick={() =>
                           setDraft((prev) => prev.map((d) => ({ ...d, checked: true })))
                         }
