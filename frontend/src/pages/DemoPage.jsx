@@ -29,7 +29,7 @@ const COMPANIES = [
     name: "새싹커머스",
     field: "이커머스 · 상품 운영",
     summary:
-      "상품 등록과 정산 절차가 담긴 인수인계서. 체크리스트 5개, 질문 로그 12건이 쌓여 있습니다.",
+      "상품 등록과 정산 절차 인수인계서. 업무를 고르게 익혀가는 신입의 리포트를 볼 수 있습니다.",
     mentorEmail: "demo-mentor-a@handover.demo",
     newcomerEmail: "demo-newcomer-a@handover.demo",
     files: [
@@ -42,7 +42,7 @@ const COMPANIES = [
     name: "한빛물류",
     field: "물류 · 배송 관제",
     summary:
-      "배차와 사고 대응 매뉴얼. 완료 체크는 했지만 같은 업무를 계속 묻는 신입의 리포트가 준비돼 있습니다.",
+      "배차와 사고 대응 매뉴얼. 완료로 체크한 업무를 계속 다시 묻는 신입의 리포트를 볼 수 있습니다.",
     mentorEmail: "demo-mentor-b@handover.demo",
     newcomerEmail: "demo-newcomer-b@handover.demo",
     files: [
@@ -55,7 +55,7 @@ const COMPANIES = [
     name: "미래테크",
     field: "SI · 백엔드 개발",
     summary:
-      "배포 절차와 온콜 대응. 기간 후반부에 질문이 끊긴 신입의 리포트를 볼 수 있습니다.",
+      "배포 절차와 온콜 대응 인수인계서. 중간부터 질문도 진행도 멈춘 신입의 리포트를 볼 수 있습니다.",
     mentorEmail: "demo-mentor-c@handover.demo",
     newcomerEmail: "demo-newcomer-c@handover.demo",
     files: [
@@ -68,7 +68,7 @@ const COMPANIES = [
     name: "그린푸드",
     field: "인사 · 채용/노무",
     summary:
-      "채용부터 급여·평가까지의 인사 업무 인수인계서. 질문이 단순 확인에서 절차·판단으로 점점 깊어지는 성장 곡선 사례를 볼 수 있습니다.",
+      "채용·급여·노무 인사 업무 인수인계서. 질문이 단순 확인에서 판단으로 깊어지는 신입의 리포트를 볼 수 있습니다.",
     mentorEmail: "demo-mentor-d@handover.demo",
     newcomerEmail: "demo-newcomer-d@handover.demo",
     files: [
@@ -115,23 +115,29 @@ function DemoPage() {
         </Button>
       </header>
 
-      <main className="app-main">
-        <h3 className="page-title">회사를 선택하세요</h3>
-        <p className="page-desc">
-          가입 없이 미리 채워둔 데이터로 전체 흐름을 체험할 수 있습니다. 사수와 신입 두 시점 모두
-          볼 수 있습니다.
-        </p>
+      <main className="app-main demo-main">
+        <div className="demo-hero">
+          <span className="demo-badge">가입 없이 체험</span>
+          <h3 className="page-title">회사를 선택하세요</h3>
+          <p className="page-desc">
+            회사마다 사수 1명과 신입 3명의 데이터를 미리 채워뒀습니다.
+            <br />
+            신입 화면은 인수인계서 챗봇과 체크리스트를, 사수 화면은 적응도 리포트를 보여줍니다.
+          </p>
+        </div>
 
         {error && <div className="banner banner-error">{error}</div>}
 
         <div className="demo-grid">
           {COMPANIES.map((company) => (
             <div className="card demo-card" key={company.id}>
-              <h4>{company.name}</h4>
-              <div className="demo-field">{company.field}</div>
+              <div className="demo-card-head">
+                <h4>{company.name}</h4>
+                <span className="demo-field">{company.field}</span>
+              </div>
               <p>{company.summary}</p>
               <div className="demo-files">
-                <span>원본 파일</span>
+                <span>원본 파일 내려받기</span>
                 {company.files.map((file) => (
                   <a key={file.href} href={file.href} download={file.download}>
                     {file.label}
@@ -156,6 +162,11 @@ function DemoPage() {
             </div>
           ))}
         </div>
+
+        <p className="demo-note">
+          원본 파일을 내려받아 사수 화면에서 직접 올리면, 자동 업무 분리와 AI 체크리스트 초안까지
+          그 자리에서 확인할 수 있습니다.
+        </p>
       </main>
     </>
   );
