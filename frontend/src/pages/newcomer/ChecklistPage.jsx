@@ -84,6 +84,29 @@ function ChecklistPage() {
   }
 
   const doneCount = items.filter((item) => item.status === "done").length;
+
+  /**
+   * 업무별로 묶어서 보여준다. 항목이 열 개를 넘어가면 평평한 목록으로는 "지금 무슨 업무를
+   * 하고 있는지"가 안 보이는데, 항목마다 이미 연결된 업무(chapter_id)가 있으므로 그걸
+   * 그대로 소제목으로 쓴다. 사수가 정한 순서는 그룹 안에서도, 그룹 사이에서도 유지한다
+   * (그룹 순서 = 그 그룹 첫 항목의 순서).
+   */
+  const groups = [];
+  const groupIndex = new Map();
+  items.forEach((item) => {
+    const key = item.chapter_id || "none";
+    if (!groupIndex.has(key)) {
+      const chapter = chapters.find((c) => c.chapter_id === item.chapter_id);
+      groupIndex.set(key, groups.length);
+      groups.push({
+        key,
+        chapterId: chapter ? item.chapter_id : null,
+        title: chapter ? chapter.title : "업무에 연결되지 않은 할 일",
+        items: [],
+      });
+    }
+    groups[groupIndex.get(key)].items.push(item);
+  });
   const writtenBy = mentorName ? `사수 ${mentorName} 님이 작성했습니다` : "사수가 작성했습니다";
 
   return (
@@ -109,8 +132,27 @@ function ChecklistPage() {
           사수님이 체크리스트를 만들면 여기에 표시됩니다.
         </div>
       ) : (
-        <ul className="check-list">
-          {items.map((item) => {
+        groups.map((group) => {
+          const groupDone = group.items.filter((item) => item.status === "done").length;
+          return (
+            <section className="check-group" key={group.key}>
+              <div className="check-group-head">
+                <b>{group.title}</b>
+                <span className={groupDone === group.items.length ? "done" : undefined}>
+                  {group.items.length}개 중 {groupDone}개 완료
+                </span>
+                {group.chapterId && (
+                  <button
+                    type="button"
+                    className="link-inline"
+                    onClick={() => setOpenChapterId(group.chapterId)}
+                  >
+                    인수인계서 보기
+                  </button>
+                )}
+              </div>
+              <ul className="check-list">
+          {group.items.map((item) => {
             const done = item.status === "done";
             const busy = pending === item.item_id;
             return (
@@ -144,15 +186,13 @@ function ChecklistPage() {
                     흐름이 한 화면에서 끝난다. "업무 보기"라고 하면 그 업무만 보여주는
                     것처럼 들리는데 실제로는 인수인계서 전체(목차 포함)가 열려서,
                     이름을 실제 동작에 맞게 고쳤다. */}
-                {item.chapter_id && chapters.some((c) => c.chapter_id === item.chapter_id) && (
-                  <Button size="sm" onClick={() => setOpenChapterId(item.chapter_id)}>
-                    관련 인수인계서 보기
-                  </Button>
-                )}
               </li>
             );
           })}
-        </ul>
+              </ul>
+            </section>
+          );
+        })
       )}
 
       {openChapterId && (

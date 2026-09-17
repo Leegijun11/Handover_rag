@@ -247,6 +247,21 @@ textarea { resize: vertical; min-height: 88px; line-height: 1.6; }
 .file-picked-list li + li { margin-top: 6px; }
 .file-picked-list .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* 업무별 묶음 — 항목이 많아도 "지금 어떤 업무를 하고 있는지"가 보이게 */
+.check-group + .check-group { margin-top: 18px; }
+.check-group-head {
+  display: flex; align-items: baseline; gap: 10px; margin: 0 2px 8px;
+  font-size: 13px;
+}
+.check-group-head b { font-size: 13.5px; }
+.check-group-head span { color: var(--text-faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+.check-group-head span.done { color: var(--success); font-weight: 600; }
+.check-group-head .link-inline { margin-left: auto; }
+.link-inline {
+  border: none; background: none; padding: 0; color: var(--accent); font-size: 12px; cursor: pointer;
+}
+.link-inline:hover { text-decoration: underline; }
+
 .check-list { list-style: none; margin: 0; padding: 0; }
 .check-list li {
   display: flex; align-items: flex-start; gap: 11px;
