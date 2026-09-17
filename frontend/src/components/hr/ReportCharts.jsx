@@ -311,6 +311,9 @@ export function ShareBar({ entries }) {
 
 const DAY = 86400000;
 const WEEKDAY_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
+// 배정한 지 오래된 신입은 기간이 길어 달력이 끝없이 늘어난다. 끊긴 구간은 최근 쪽에서 보이므로
+// 뒤에서부터 이만큼만 그리고, 잘렸다는 사실을 캡션에 적는다.
+const MAX_WEEKS = 8;
 
 function localMidnight(date) {
   const d = new Date(date);
@@ -342,9 +345,9 @@ export function ActivityCalendar({ questionTimes, doneTimes, start, end }) {
   // 첫 주의 월요일부터 마지막 주의 일요일까지 채운다 — 요일 열이 어긋나면 달력으로 안 읽힌다.
   const gridStart = new Date(first.getTime() - weekdayIndex(first) * DAY);
   const gridEnd = new Date(last.getTime() + (6 - weekdayIndex(last)) * DAY);
-  const weeks = [];
+  const allWeeks = [];
   for (let cursor = gridStart; cursor <= gridEnd; cursor = new Date(cursor.getTime() + 7 * DAY)) {
-    weeks.push(
+    allWeeks.push(
       Array.from({ length: 7 }, (_, i) => {
         const date = new Date(cursor.getTime() + i * DAY);
         const inPeriod = date >= first && date <= last;
@@ -357,9 +360,13 @@ export function ActivityCalendar({ questionTimes, doneTimes, start, end }) {
       }),
     );
   }
+  const truncated = allWeeks.length > MAX_WEEKS;
+  const weeks = truncated ? allWeeks.slice(-MAX_WEEKS) : allWeeks;
+  const shownFrom = weeks[0].find((cell) => cell.inPeriod)?.date || first;
 
   const level = (count) => Math.min(count, 4); // 1,2,3,4+ 네 단계
   const md = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
+  const ymd = (d) => `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
   // 달이 바뀌는 칸(매월 1일과 기간 첫날)은 "9/1"처럼 월을 같이 적어 어느 달인지 알 수 있게 한다.
   const cellLabel = (date) =>
     date.getDate() === 1 || date.getTime() === first.getTime() ? md(date) : `${date.getDate()}`;
@@ -367,7 +374,8 @@ export function ActivityCalendar({ questionTimes, doneTimes, start, end }) {
   return (
     <div className="cal">
       <p className="cal-caption">
-        {`${first.getFullYear()}년 ${md(first)} ~ ${md(last)}`}
+        {`${ymd(shownFrom)} ~ ${ymd(last)}`}
+        {truncated && <span className="cal-caption-note">최근 {MAX_WEEKS}주만 표시</span>}
       </p>
       <div className="cal-grid">
         {WEEKDAY_LABELS.map((label) => (

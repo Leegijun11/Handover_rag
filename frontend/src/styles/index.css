@@ -628,6 +628,7 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
 /* 날짜별 활동 달력 — 활동한 날과 조용한 날을 날짜째로 보여준다 */
 .cal { display: flex; flex-direction: column; gap: 10px; }
 .cal-caption { margin: 0; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.cal-caption-note { margin-left: 8px; font-weight: 400; color: var(--text-faint); }
 .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 .cal-head {
   font-size: 11px; color: var(--text-faint); text-align: center; padding-bottom: 2px;

@@ -91,9 +91,9 @@ ARCHETYPES = {
         "assigned": 21,
         "done": [18, 14, 9, 4, None],
         "phases": [
-            phase(20, 15, [3, 2, 2, 1], ["S11", "S11", "T1", "S12"], ["fact", "fact", "procedure"]),
-            phase(14, 8, [2, 3, 1, 2], ["S21", "S22", "S21", "T2", "S12"], ["procedure", "judgment", "procedure"]),
-            phase(7, 1, [2, 1, 3, 2], ["S31", "S32", "S22", "T3", "S12"], ["judgment", "judgment", "advanced"]),
+            phase(20, 15, [4, 2, 1, 3, 2], ["S11", "S11", "T1", "S12"], ["fact", "fact", "procedure"]),
+            phase(14, 8, [2, 0, 3, 1, 4, 2], ["S21", "S22", "S21", "T2", "S12"], ["procedure", "judgment", "procedure"]),
+            phase(7, 1, [3, 1, 2, 0, 4], ["S31", "S32", "S22", "T3", "S12"], ["judgment", "judgment", "advanced"]),
         ],
     },
     # 완료한 업무를 반복해서 물음 — 읽고 실습까지 체크한 업무를 이후에도 계속 묻는다
@@ -101,9 +101,9 @@ ARCHETYPES = {
         "assigned": 18,
         "done": [16, 13, 12, None, None],
         "phases": [
-            phase(17, 14, [3, 2, 2], ["S11", "S11", "T1"], ["fact", "fact", "procedure"]),
-            phase(13, 8, [2, 1, 3, 2], ["S11", "S21", "S11", "S12"], ["procedure", "fact", "procedure"]),
-            phase(7, 1, [3, 2, 2, 1], ["S11", "S21", "S11", "S22"], ["procedure", "procedure", "judgment"]),
+            phase(17, 14, [4, 2, 3, 1], ["S11", "S11", "T1"], ["fact", "fact", "procedure"]),
+            phase(13, 8, [3, 1, 4, 2, 0], ["S11", "S21", "S11", "S12"], ["procedure", "fact", "procedure"]),
+            phase(7, 1, [2, 4, 1, 3, 2], ["S11", "S21", "S11", "S22"], ["procedure", "procedure", "judgment"]),
         ],
     },
     # 도중에 손을 놓음 — 앞쪽에는 매일 들어오다가 어느 날부터 질문도 체크리스트도 멈춘다
@@ -111,7 +111,7 @@ ARCHETYPES = {
         "assigned": 18,
         "done": [17, 15, None, None, None],
         "phases": [
-            phase(17, 14, [4, 3, 5, 2], ["T3", "S31", "T1", "S12", "S32", "S21", "S22"], ["fact", "fact", "procedure"], miss=2),
+            phase(17, 14, [5, 3, 6, 2], ["T3", "S31", "T1", "S12", "S32", "S21", "S22"], ["fact", "fact", "procedure"], miss=2),
         ],
     },
     # 질문이 깊어지는 성장 — 사실 확인에서 절차로, 다시 판단·심화로 옮겨간다
@@ -119,24 +119,24 @@ ARCHETYPES = {
         "assigned": 20,
         "done": [17, 12, 8, 3, None],
         "phases": [
-            phase(19, 15, [3, 2, 1, 2], ["S11", "T1", "S11", "S12"], ["fact", "fact", "procedure"]),
-            phase(14, 8, [2, 3, 2, 1], ["S21", "S12", "S22", "S21"], ["procedure", "procedure", "judgment"]),
-            phase(7, 1, [2, 2, 3, 1], ["S22", "S31", "S32", "T3", "S12"], ["judgment", "advanced", "advanced"]),
+            phase(19, 15, [3, 1, 4, 2], ["S11", "T1", "S11", "S12"], ["fact", "fact", "procedure"]),
+            phase(14, 8, [2, 4, 1, 0, 3], ["S21", "S12", "S22", "S21"], ["procedure", "procedure", "judgment"]),
+            phase(7, 1, [4, 2, 1, 3, 2], ["S22", "S31", "S32", "T3", "S12"], ["judgment", "advanced", "advanced"]),
         ],
     },
     # 배정 1주차 — 아직 판단하기 이른 단계
     "early": {
         "assigned": 5,
         "done": [1, None, None, None, None],
-        "phases": [phase(4, 1, [3, 2, 4, 2], ["S11", "T1", "S11", "S12", "S21"], ["fact", "fact", "procedure"])],
+        "phases": [phase(4, 1, [4, 2, 5, 3], ["S11", "T1", "S11", "S12", "S21"], ["fact", "fact", "procedure"])],
     },
     # 한 영역에만 질문이 몰림 — 둘째 대분류 안에서만 맴돈다
     "narrow": {
         "assigned": 15,
         "done": [12, 8, None, None, None],
         "phases": [
-            phase(14, 8, [2, 1, 3, 2], ["S21", "S21", "S22", "T2"], ["fact", "procedure", "procedure"]),
-            phase(7, 1, [1, 3, 2, 2], ["S21", "S22", "S21"], ["procedure", "judgment", "procedure"], miss=2),
+            phase(14, 8, [3, 2, 0, 4, 1], ["S21", "S21", "S22", "T2"], ["fact", "procedure", "procedure"]),
+            phase(7, 1, [2, 5, 1, 2, 3], ["S21", "S22", "S21"], ["procedure", "judgment", "procedure"], miss=2),
         ],
     },
 }
