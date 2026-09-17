@@ -403,7 +403,7 @@ export function ActivityCalendar({ questionTimes, doneTimes, start, end }) {
           <i className="cal-swatch lv3" /> 4건 이상
         </span>
         <span>
-          <i className="cal-swatch done" /> 체크리스트 완료
+          <i className="cal-swatch check">✓</i> 체크리스트 완료한 날
         </span>
       </div>
     </div>

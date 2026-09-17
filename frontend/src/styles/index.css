@@ -595,7 +595,7 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
 .metric-note { margin: 4px 0 0; font-size: 12px; color: var(--accent); }
 .metric-formula { margin: 4px 0 0; font-size: 11.5px; color: var(--text-faint); line-height: 1.5; }
 .metric-body {
-  min-width: 0; min-height: 150px; display: flex; flex-direction: column; justify-content: center;
+  min-width: 0; min-height: 190px; display: flex; flex-direction: column; justify-content: center;
 }
 .metric-summary {
   margin: 12px 0 0; padding-top: 10px; border-top: 1px dashed var(--border);
@@ -628,13 +628,13 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
 /* 날짜별 활동 달력 — 활동한 날과 조용한 날을 날짜째로 보여준다 */
 .cal { display: flex; flex-direction: column; gap: 10px; }
 .cal-grid {
-  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px;
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; max-width: 470px;
 }
 .cal-head {
   font-size: 11px; color: var(--text-faint); text-align: center; padding-bottom: 2px;
 }
 .cal-cell {
-  position: relative; aspect-ratio: 1 / .78; border-radius: 6px; background: #f1f3f6;
+  position: relative; aspect-ratio: 1 / .62; border-radius: 6px; background: #f1f3f6;
   border: 1px solid transparent; display: flex; align-items: center; justify-content: center;
   font-variant-numeric: tabular-nums;
 }
@@ -647,11 +647,11 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
 .cal-cell.lv3 { background: #2f6feb; }
 .cal-cell.lv1 b { color: #2b3a4d; }
 .cal-cell.lv2 b, .cal-cell.lv3 b { color: #fff; }
-.cal-cell.done { border-color: #1f8a5b; }
 .cal-cell.done::after {
-  content: ""; position: absolute; top: 3px; right: 3px; width: 6px; height: 6px;
-  border-radius: 50%; background: #1f8a5b;
+  content: "✓"; position: absolute; top: 2px; left: 5px; font-size: 11px; line-height: 1;
+  font-weight: 700; color: #1f8a5b;
 }
+.cal-cell.lv2.done::after, .cal-cell.lv3.done::after { color: #eafff4; }
 .cal-num {
   position: absolute; bottom: 2px; right: 5px; font-size: 10px; font-style: normal;
   color: rgba(0, 0, 0, .45);
@@ -665,7 +665,9 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
 .cal-swatch.lv1 { background: #d7e4fb; }
 .cal-swatch.lv2 { background: #90b4f4; }
 .cal-swatch.lv3 { background: #2f6feb; }
-.cal-swatch.done { background: #fff; border-color: #1f8a5b; }
+.cal-swatch.check {
+  background: none; border: none; width: auto; color: #1f8a5b; font-weight: 700; font-size: 12px;
+}
 
 /* 질문 유형 비율 — 막대 한 줄 + 범례 */
 .share { display: flex; flex-direction: column; gap: 12px; }
