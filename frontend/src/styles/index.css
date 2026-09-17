@@ -575,6 +575,8 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
   font-weight: 600; font-variant-numeric: tabular-nums;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* 항목이 홀수(3개)라 마지막 값은 남은 칸을 채운다 — 빈 칸이 생기면 표가 깨져 보인다 */
+.rpt-meta dd:last-of-type { grid-column: span 3; }
 
 .rpt-sec { padding: 22px 0 4px; }
 .rpt-sec + .rpt-sec { border-top: 1px solid var(--border); }
@@ -707,6 +709,9 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
 .cal-cell.lv4 { background: #2f6feb; }
 .cal-cell.lv1 b, .cal-cell.lv2 b { color: #22304a; }
 .cal-cell.lv3 b, .cal-cell.lv4 b { color: #fff; }
+/* 지난달·다음달 칸은 흐리게 두지만, 활동이 있어 색이 찬 칸은 또렷해야 한다 —
+   9월 달력에 걸린 8/31처럼 색은 진한데 날짜만 흐린 칸이 나왔다. */
+.cal-cell.lv1 b, .cal-cell.lv2 b, .cal-cell.lv3 b, .cal-cell.lv4 b { opacity: 1; }
 .cal-cell.done::after {
   content: "✓"; position: absolute; top: 3px; left: 4px; width: 13px; height: 13px;
   display: flex; align-items: center; justify-content: center; border-radius: 4px;

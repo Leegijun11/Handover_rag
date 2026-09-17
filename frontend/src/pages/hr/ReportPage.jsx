@@ -270,8 +270,6 @@ function ReportDetail({
           <dd>{mentorName || "-"}</dd>
           <dt>배정 문서</dt>
           <dd title={documentLabel || ""}>{documentLabel || "-"}</dd>
-          <dt>생성 일시</dt>
-          <dd>{formatDateTime(report.generated_at)}</dd>
         </dl>
       </header>
 
