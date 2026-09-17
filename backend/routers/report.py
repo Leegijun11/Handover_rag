@@ -158,8 +158,9 @@ _SIGNAL_GUIDE = {
     ),
     "chapter_heatmap": (
         "인수인계서의 업무(챕터)별 질문 횟수다. 키는 업무 식별자이고 값은 그 업무에 대한 질문 건수다. "
-        "사람 수나 점수, 응답률이 아니다. 질문이 몰린 업무와 한 번도 묻지 않은 업무를 짚어주면 된다. "
-        "업무 이름은 모르니 '특정 업무에 질문이 몰렸다'처럼 개수 위주로만 서술해라."
+        "사람 수나 점수, 응답률이 아니다. 질문이 한 번이라도 있었던 업무만 들어 있어서 전체 업무 수는 "
+        "알 수 없으니, 묻지 않은 업무가 있는지 없는지는 말하지 마라. 업무 이름도 모르니 "
+        "'특정 업무에 질문이 몰렸다'처럼 개수 위주로만 서술해라."
     ),
     "gap_task": (
         "체크리스트에서 완료로 체크한 뒤에도 같은 업무를 다시 물은 항목이다. title은 항목 이름, "
@@ -242,7 +243,10 @@ def generate_report(
     require_role(current_user, "mentor")
     _require_mentor_owns_newcomer(db, current_user, payload.newcomer_id)
 
-    now = datetime.now(timezone.utc)
+    # DB의 datetime은 전부 tz 정보 없는 UTC라, 여기서도 naive UTC로 맞춘다. tz-aware 값을 쓰면
+    # 아래 재생성 간격 비교(now - generated_at)에서 TypeError가 나서, 같은 신입의 두 번째
+    # 리포트 생성이 항상 500으로 떨어졌다 (팀원 B 확인·수정, 9/17).
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     last_report = (
         db.query(AdaptationReportORM)
