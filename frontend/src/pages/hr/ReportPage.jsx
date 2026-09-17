@@ -61,18 +61,27 @@ function Delta({ value }) {
 const STATUS_LABEL = { good: "양호", concern: "주의", watch: "관찰 중", none: "데이터 부족" };
 
 /** 지표 하나의 근거 — 지표와 신호를 1:1로 묶어서 같은 사실을 두 번 보여주지 않는다. */
-function MetricEvidence({ axisKey, report, previousReport, chapters, checklist, chatTimes, chapterTitleOf }) {
+function MetricEvidence({ axisKey, report, score, chapters, checklist, chatLogs, chapterTitleOf }) {
   const data = Object.fromEntries((report.sections || []).map((s) => [s.signal_type, s.data || {}]));
 
   if (axisKey === "depth") {
-    const counts = data.growth_curve?.counts || {};
+    // 점수를 낸 구간과 같은 질문으로 그린다 — 막대는 전체, 점수는 최근이면 서로 안 맞는다.
+    const counts = score?.detail?.depthCounts || data.growth_curve?.counts || {};
     return (
-      <ShareBar
-        entries={Object.entries(QUESTION_TYPE_LABEL).map(([key, label]) => ({
-          label,
-          value: counts[key] || 0,
-        }))}
-      />
+      <>
+        <ShareBar
+          entries={Object.entries(QUESTION_TYPE_LABEL).map(([key, label]) => ({
+            label,
+            value: counts[key] || 0,
+          }))}
+        />
+        {score?.detail?.depthRecentOnly && (
+          <p className="evidence-note">
+            기간 전체 질문은 {data.growth_curve?.total ?? 0}건입니다. 배정 초기 질문에 가려지지
+            않게 뒤쪽 절반만 보고 점수를 냅니다.
+          </p>
+        )}
+      </>
     );
   }
 
@@ -150,7 +159,7 @@ function MetricEvidence({ axisKey, report, previousReport, chapters, checklist, 
     const { done } = splitChecklist(report, checklist);
     return (
       <ActivityCalendar
-        questionTimes={chatTimes.filter((t) => t >= start && t <= end)}
+        questionTimes={chatLogs.map((log) => log.at).filter((t) => t >= start && t <= end)}
         doneTimes={done.map((item) => parseServerDate(item.completed_at)).filter(Boolean)}
         start={start}
         end={end}
@@ -203,7 +212,7 @@ function ReportDetail({
   previousReport,
   chapters,
   checklist,
-  chatTimes,
+  chatLogs,
   assignedAt,
   newcomerName,
   mentorName,
@@ -211,9 +220,9 @@ function ReportDetail({
   chapterTitleOf,
   onBack,
 }) {
-  const current = computeAdaptationScore(report, chapters, checklist, chatTimes);
+  const current = computeAdaptationScore(report, chapters, checklist, chatLogs);
   const previous = previousReport
-    ? computeAdaptationScore(previousReport, chapters, checklist, chatTimes)
+    ? computeAdaptationScore(previousReport, chapters, checklist, chatLogs)
     : null;
   const totalDelta =
     previous && previous.total !== null && current.total !== null ? current.total - previous.total : null;
@@ -353,10 +362,10 @@ function ReportDetail({
                 <MetricEvidence
                   axisKey={axis.key}
                   report={report}
-                  previousReport={previousReport}
+                  score={current}
                   chapters={chapters}
                   checklist={checklist}
-                  chatTimes={chatTimes}
+                  chatLogs={chatLogs}
                   chapterTitleOf={chapterTitleOf}
                 />
                 {summary && <p className="metric-summary">{summary}</p>}
@@ -395,7 +404,7 @@ function ReportPage() {
   const [checklist, setChecklist] = useState([]);
   const [documents, setDocuments] = useState([]);
   // 날짜별 질문 흐름 그래프용. 질문 본문은 쓰지 않고 시각만 뽑아둔다.
-  const [chatTimes, setChatTimes] = useState([]);
+  const [chatLogs, setChatLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -447,9 +456,13 @@ function ReportPage() {
     getChatLogs(newcomerId)
       .then(({ data }) => {
         if (cancelled) return;
-        setChatTimes((data || []).map((log) => parseServerDate(log.created_at)).filter(Boolean));
+        setChatLogs(
+          (data || [])
+            .map((log) => ({ at: parseServerDate(log.created_at), type: log.question_type }))
+            .filter((log) => log.at),
+        );
       })
-      .catch(() => !cancelled && setChatTimes([]));
+      .catch(() => !cancelled && setChatLogs([]));
     return () => {
       cancelled = true;
     };
@@ -537,7 +550,7 @@ function ReportPage() {
               }
               chapters={chapters}
               checklist={checklist}
-              chatTimes={chatTimes}
+              chatLogs={chatLogs}
               assignedAt={assignment?.assigned_at}
               newcomerName={assignment?.name}
               mentorName={mentor?.name}

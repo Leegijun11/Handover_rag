@@ -18,8 +18,8 @@ export const SCORE_AXES = [
   {
     key: "depth",
     label: "질문 깊이",
-    formula: "(판단·심화 질문 + 절차 질문 × 0.5) ÷ 전체 질문",
-    meaning: "단순 확인을 넘어서는 질문을 하는지",
+    formula: "(판단·심화 질문 + 절차 질문 × 0.5) ÷ 질문 수 — 기간 뒤쪽 절반만 봄",
+    meaning: "지금은 어떤 수준의 질문을 하는지",
     strength: "단순 확인을 넘어 판단이 필요한 질문을 하고 있습니다.",
     concern: "아직 사실을 확인하는 질문 위주로 묻고 있습니다.",
   },
@@ -83,10 +83,11 @@ function workdaysBetween(start, end) {
  * @param report    AdaptationReport (sections 포함)
  * @param chapters  배정 문서의 DocumentChapter 목록
  * @param checklist 신입의 ChecklistItem 목록
- * @param chatTimes 질문 시각 목록(Date) — 활동 꾸준함 계산용. 없으면 그 축만 null
+ * @param chatLogs  질문 목록 [{at: Date, type}] — 활동 꾸준함과 질문 깊이 계산용
  * @returns {{ axes, basis, detail, total }}
  */
-export function computeAdaptationScore(report, chapters, checklist, chatTimes) {
+export function computeAdaptationScore(report, chapters, checklist, chatLogs) {
+  const chatTimes = (chatLogs || []).map((log) => log.at);
   const data = Object.fromEntries(
     (report?.sections || []).map((s) => [s.signal_type, s.data || {}]),
   );
@@ -130,13 +131,31 @@ export function computeAdaptationScore(report, chapters, checklist, chatTimes) {
       .filter((id) => tops.has(id)),
   );
 
+  // 질문 깊이는 "지금" 어떤 수준으로 묻는지를 봐야 한다. 기간 전체로 재면 배정 초기에 몰린
+  // 사실 확인 질문이 계속 발목을 잡아서, 몇 주가 지나 판단 질문을 하고 있어도 점수가 안 오른다.
+  // 그래서 기간 뒤쪽 절반만 쓰고, 그 구간 표본이 너무 적으면(8건 미만) 전체로 되돌린다.
+  const midpoint =
+    periodStart && periodEnd ? new Date((periodStart.getTime() + periodEnd.getTime()) / 2) : null;
+  const inPeriod = (chatLogs || []).filter(
+    (log) => periodStart && periodEnd && log.at >= periodStart && log.at <= periodEnd,
+  );
+  const recent = midpoint ? inPeriod.filter((log) => log.at >= midpoint) : [];
+  const depthLogs = recent.length >= 8 ? recent : inPeriod;
+  const depthCounts = depthLogs.length
+    ? depthLogs.reduce((acc, log) => ({ ...acc, [log.type]: (acc[log.type] || 0) + 1 }), {})
+    : counts;
+  const depthTotal = depthLogs.length || questions;
+  const depthRecentOnly = depthLogs === recent && recent.length > 0;
+
   const axes = {
     // 절차 질문("어떻게 하나요?")은 직접 해보려는 단계라 사실 확인보다 한 단계 깊다. 0으로 치면
     // 순조롭게 적응 중인 신입도 거의 늘 주의로 떠서, 절반만 인정한다.
-    depth: questions
+    depth: depthTotal
       ? pct(
-          ((counts.judgment || 0) + (counts.advanced || 0) + (counts.procedure || 0) * 0.5) /
-            questions,
+          ((depthCounts.judgment || 0) +
+            (depthCounts.advanced || 0) +
+            (depthCounts.procedure || 0) * 0.5) /
+            depthTotal,
         )
       : null,
     coverage: tops.size ? pct(touched.size / tops.size) : null,
@@ -160,7 +179,9 @@ export function computeAdaptationScore(report, chapters, checklist, chatTimes) {
 
   // 점수 옆에 붙이는 근거 숫자 — 표본이 작으면(완료 2개 등) 점수를 그만큼 가볍게 읽게 한다.
   const basis = {
-    depth: `질문 ${questions}건 기준`,
+    depth: depthRecentOnly
+      ? `기간 뒤쪽 절반 질문 ${depthTotal}건 기준`
+      : `질문 ${depthTotal}건 기준`,
     coverage: `${hasDepth ? "대분류" : "업무"} ${tops.size}개 중 ${touched.size}개`,
     alignment: `완료 ${done.length}개 기준`,
     consistency: workdays
@@ -170,7 +191,15 @@ export function computeAdaptationScore(report, chapters, checklist, chatTimes) {
   };
 
   // 권장 조치 문장이 근거 숫자를 그대로 쓸 수 있게 따로 넘긴다.
-  const detail = { workdays, expectedDays, activeDays: activeDays.size, questions };
+  const detail = {
+    workdays,
+    expectedDays,
+    activeDays: activeDays.size,
+    questions,
+    depthCounts,
+    depthTotal,
+    depthRecentOnly,
+  };
 
   const values = Object.values(axes).filter((v) => v !== null);
   const total = values.length
