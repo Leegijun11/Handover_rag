@@ -79,7 +79,10 @@ HOURS = [10, 11, 14, 16, 17]  # 하루에 여러 건이면 이 시각들로 흩�
 
 
 def phase(start, end, per_day, roles, mix, miss=0):
-    return {"start": start, "end": end, "per_day": per_day, "roles": roles, "mix": mix, "miss": miss}
+    """per_day는 숫자 하나 또는 요일마다 돌려 쓸 목록(예: [2, 3, 1])이다 — 매일 같은 건수면
+    리포트 달력이 한 가지 색으로만 채워져서 활발한 날과 뜸한 날이 구분되지 않는다."""
+    counts = per_day if isinstance(per_day, list) else [per_day]
+    return {"start": start, "end": end, "per_day": counts, "roles": roles, "mix": mix, "miss": miss}
 
 
 ARCHETYPES = {
@@ -88,9 +91,9 @@ ARCHETYPES = {
         "assigned": 21,
         "done": [18, 14, 9, 4, None],
         "phases": [
-            phase(20, 15, 2, ["S11", "S11", "T1", "S12"], ["fact", "fact", "procedure"]),
-            phase(14, 8, 2, ["S21", "S22", "S21", "T2", "S12"], ["procedure", "judgment", "procedure"]),
-            phase(7, 1, 2, ["S31", "S32", "S22", "T3", "S12"], ["judgment", "judgment", "advanced"]),
+            phase(20, 15, [3, 2, 2, 1], ["S11", "S11", "T1", "S12"], ["fact", "fact", "procedure"]),
+            phase(14, 8, [2, 3, 1, 2], ["S21", "S22", "S21", "T2", "S12"], ["procedure", "judgment", "procedure"]),
+            phase(7, 1, [2, 1, 3, 2], ["S31", "S32", "S22", "T3", "S12"], ["judgment", "judgment", "advanced"]),
         ],
     },
     # 완료한 업무를 반복해서 물음 — 읽고 실습까지 체크한 업무를 이후에도 계속 묻는다
@@ -98,9 +101,9 @@ ARCHETYPES = {
         "assigned": 18,
         "done": [16, 13, 12, None, None],
         "phases": [
-            phase(17, 14, 2, ["S11", "S11", "T1"], ["fact", "fact", "procedure"]),
-            phase(13, 8, 2, ["S11", "S21", "S11", "S12"], ["procedure", "fact", "procedure"]),
-            phase(7, 1, 2, ["S11", "S21", "S11", "S22"], ["procedure", "procedure", "judgment"]),
+            phase(17, 14, [3, 2, 2], ["S11", "S11", "T1"], ["fact", "fact", "procedure"]),
+            phase(13, 8, [2, 1, 3, 2], ["S11", "S21", "S11", "S12"], ["procedure", "fact", "procedure"]),
+            phase(7, 1, [3, 2, 2, 1], ["S11", "S21", "S11", "S22"], ["procedure", "procedure", "judgment"]),
         ],
     },
     # 도중에 손을 놓음 — 앞쪽에는 매일 들어오다가 어느 날부터 질문도 체크리스트도 멈춘다
@@ -108,7 +111,7 @@ ARCHETYPES = {
         "assigned": 18,
         "done": [17, 15, None, None, None],
         "phases": [
-            phase(17, 14, 4, ["T3", "S31", "T1", "S12", "S32", "S21", "S22"], ["fact", "fact", "procedure"], miss=2),
+            phase(17, 14, [4, 3, 5, 2], ["T3", "S31", "T1", "S12", "S32", "S21", "S22"], ["fact", "fact", "procedure"], miss=2),
         ],
     },
     # 질문이 깊어지는 성장 — 사실 확인에서 절차로, 다시 판단·심화로 옮겨간다
@@ -116,24 +119,24 @@ ARCHETYPES = {
         "assigned": 20,
         "done": [17, 12, 8, 3, None],
         "phases": [
-            phase(19, 15, 2, ["S11", "T1", "S11", "S12"], ["fact", "fact", "procedure"]),
-            phase(14, 8, 2, ["S21", "S12", "S22", "S21"], ["procedure", "procedure", "judgment"]),
-            phase(7, 1, 2, ["S22", "S31", "S32", "T3", "S12"], ["judgment", "advanced", "advanced"]),
+            phase(19, 15, [3, 2, 1, 2], ["S11", "T1", "S11", "S12"], ["fact", "fact", "procedure"]),
+            phase(14, 8, [2, 3, 2, 1], ["S21", "S12", "S22", "S21"], ["procedure", "procedure", "judgment"]),
+            phase(7, 1, [2, 2, 3, 1], ["S22", "S31", "S32", "T3", "S12"], ["judgment", "advanced", "advanced"]),
         ],
     },
     # 배정 1주차 — 아직 판단하기 이른 단계
     "early": {
         "assigned": 5,
         "done": [1, None, None, None, None],
-        "phases": [phase(4, 1, 3, ["S11", "T1", "S11", "S12", "S21"], ["fact", "fact", "procedure"])],
+        "phases": [phase(4, 1, [3, 2, 4, 2], ["S11", "T1", "S11", "S12", "S21"], ["fact", "fact", "procedure"])],
     },
     # 한 영역에만 질문이 몰림 — 둘째 대분류 안에서만 맴돈다
     "narrow": {
         "assigned": 15,
         "done": [12, 8, None, None, None],
         "phases": [
-            phase(14, 8, 2, ["S21", "S21", "S22", "T2"], ["fact", "procedure", "procedure"]),
-            phase(7, 1, 2, ["S21", "S22", "S21"], ["procedure", "judgment", "procedure"], miss=2),
+            phase(14, 8, [2, 1, 3, 2], ["S21", "S21", "S22", "T2"], ["fact", "procedure", "procedure"]),
+            phase(7, 1, [1, 3, 2, 2], ["S21", "S22", "S21"], ["procedure", "judgment", "procedure"], miss=2),
         ],
     },
 }
@@ -336,17 +339,22 @@ def utcnow_naive() -> datetime:
 NOW = utcnow_naive().replace(hour=0, minute=0, second=0, microsecond=0)
 
 
-def at(days_ago: float, hour: int) -> datetime:
-    return (NOW - timedelta(days=days_ago)).replace(hour=hour, minute=0)
+# 서버는 UTC로 저장하고 화면은 보는 사람의 시간대로 보여준다. 시각을 UTC 기준으로 잡으면
+# 한국에서 볼 때 오후 질문이 다음 날 새벽으로 밀려서, 리포트 달력에 주말 활동처럼 찍힌다.
+# 그래서 hour는 한국 시간으로 받고 UTC로 바꿔 저장한다 (NOW = UTC 자정 = 한국 오전 9시).
+KST_OFFSET = 9
+
+
+def at(days_ago: float, hour_kst: int) -> datetime:
+    return NOW - timedelta(days=days_ago) + timedelta(hours=hour_kst - KST_OFFSET)
 
 
 def at_workday(days_ago: int, hour: int) -> datetime:
-    """주말이면 직전 평일로 당긴다 — 질문은 평일에만 넣는데 체크리스트 완료만 토·일에 찍히면
+    """주말이면 직전 평일로 당긴다 (한국 시간 기준 요일) — 질문은 평일에만 넣는데 체크리스트 완료만 토·일에 찍히면
     리포트 달력에서 주말에만 활동한 날처럼 보인다."""
-    when = at(days_ago, hour)
-    while when.weekday() >= 5:
-        when -= timedelta(days=1)
-    return when
+    while (NOW - timedelta(days=days_ago)).weekday() >= 5:
+        days_ago += 1
+    return at(days_ago, hour)
 
 
 def parse_file(path):
@@ -373,14 +381,16 @@ def build_logs(arch, take, by_role):
     """구간(phases)을 평일 단위로 풀어서 질문 로그를 만든다."""
     logs = []
     for ph in arch["phases"]:
-        role_cycle, mix_cycle, misses = 0, 0, ph["miss"]
+        role_cycle, mix_cycle, misses, day_index = 0, 0, ph["miss"], 0
         for days_ago in range(ph["start"], ph["end"] - 1, -1):
-            when = NOW - timedelta(days=days_ago)
+            when = NOW - timedelta(days=days_ago)  # 한국 시간 기준 날짜
             if when.weekday() >= 5:  # 주말엔 묻지 않는다
                 continue
-            for i in range(ph["per_day"]):
+            per_day = ph["per_day"][day_index % len(ph["per_day"])]
+            day_index += 1
+            for i in range(per_day):
                 hour = HOURS[i % len(HOURS)]
-                if misses and i == ph["per_day"] - 1 and days_ago % 3 == 0:
+                if misses and i == per_day - 1 and days_ago % 3 == 0:
                     misses -= 1
                     logs.append({
                         "created_at": at(days_ago, hour), "chapter_title": None, "question_type": "fact",

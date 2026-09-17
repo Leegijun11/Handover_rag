@@ -358,11 +358,17 @@ export function ActivityCalendar({ questionTimes, doneTimes, start, end }) {
     );
   }
 
-  const level = (count) => (count === 0 ? 0 : count <= 1 ? 1 : count <= 3 ? 2 : 3);
+  const level = (count) => Math.min(count, 4); // 1,2,3,4+ 네 단계
   const md = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
+  // 달이 바뀌는 칸(매월 1일과 기간 첫날)은 "9/1"처럼 월을 같이 적어 어느 달인지 알 수 있게 한다.
+  const cellLabel = (date) =>
+    date.getDate() === 1 || date.getTime() === first.getTime() ? md(date) : `${date.getDate()}`;
 
   return (
     <div className="cal">
+      <p className="cal-caption">
+        {`${first.getFullYear()}년 ${md(first)} ~ ${md(last)}`}
+      </p>
       <div className="cal-grid">
         {WEEKDAY_LABELS.map((label) => (
           <span className="cal-head" key={label}>
@@ -383,7 +389,7 @@ export function ActivityCalendar({ questionTimes, doneTimes, start, end }) {
             : "";
           return (
             <span className={classes.join(" ")} key={cell.date.getTime()} title={title}>
-              <b>{cell.date.getDate()}</b>
+              <b>{cellLabel(cell.date)}</b>
               {cell.inPeriod && cell.questions > 0 && <i className="cal-num">{cell.questions}</i>}
             </span>
           );
@@ -394,13 +400,16 @@ export function ActivityCalendar({ questionTimes, doneTimes, start, end }) {
           <i className="cal-swatch lv0" /> 활동 없음
         </span>
         <span>
-          <i className="cal-swatch lv1" /> 질문 1건
+          <i className="cal-swatch lv1" /> 1건
         </span>
         <span>
-          <i className="cal-swatch lv2" /> 2~3건
+          <i className="cal-swatch lv2" /> 2건
         </span>
         <span>
-          <i className="cal-swatch lv3" /> 4건 이상
+          <i className="cal-swatch lv3" /> 3건
+        </span>
+        <span>
+          <i className="cal-swatch lv4" /> 4건 이상
         </span>
         <span>
           <i className="cal-swatch check">✓</i> 체크리스트 완료한 날
