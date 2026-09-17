@@ -319,16 +319,33 @@ function ChecklistManagePage() {
 
           <div className="card">
             <p className="card-title">항목 만들기</p>
-            <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--text-muted)" }}>
+            <p style={{ margin: "0 0 14px", fontSize: 13, color: "var(--text-muted)" }}>
               인수인계서를 바탕으로 후보를 뽑아옵니다. 승인하기 전까지는 저장되지 않습니다.
             </p>
-            <div className="actions" style={{ marginTop: 0 }}>
-              <Button variant="primary" onClick={handleDraft} disabled={drafting || busy}>
-                {drafting ? "초안 만드는 중…" : "AI로 할 일 뽑기"}
-              </Button>
-              <Button onClick={handleReadingTasks} disabled={drafting || busy || !chapters.length}>
-                업무별 읽기 항목 만들기
-              </Button>
+            {/* 예전엔 버튼 두 개만 나란히 있어서, 눌러보기 전에는 무엇이 만들어지는지 알 수
+                없었다. 각 방식이 무엇을 만드는지 먼저 읽고 고르게 한다. */}
+            <div className="pick-list">
+              <div className="pick">
+                <div>
+                  <b>AI로 할 일 뽑기</b>
+                  <p>업무 본문을 읽고 신입이 직접 해볼 만한 실습 항목을 제안합니다.</p>
+                </div>
+                <Button variant="primary" onClick={handleDraft} disabled={drafting || busy}>
+                  {drafting ? "뽑는 중…" : "후보 보기"}
+                </Button>
+              </div>
+              <div className="pick">
+                <div>
+                  <b>업무마다 읽기 항목 만들기</b>
+                  <p>
+                    업무 {chapters.length}개에 대해 "○○ 읽어보기" 항목을 한 번에 만듭니다. 읽었다고
+                    체크한 뒤에도 같은 업무를 계속 물으면 리포트가 잡아냅니다.
+                  </p>
+                </div>
+                <Button onClick={handleReadingTasks} disabled={drafting || busy || !chapters.length}>
+                  후보 보기
+                </Button>
+              </div>
             </div>
             {!chapters.length && (
               <p className="hint" style={{ marginTop: 8 }}>

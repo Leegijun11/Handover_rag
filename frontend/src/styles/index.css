@@ -237,6 +237,16 @@ textarea { resize: vertical; min-height: 88px; line-height: 1.6; }
 .demo-card .actions { margin-top: 0; }
 .demo-card .btn { flex: 1; }
 
+/* 만들기 방식 고르기 — 무엇이 만들어지는지 먼저 읽고 고른다 */
+.pick-list { display: flex; flex-direction: column; gap: 10px; }
+.pick {
+  display: flex; align-items: center; gap: 14px; padding: 13px 14px;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2);
+}
+.pick > div { flex: 1; min-width: 0; }
+.pick b { font-size: 13.5px; }
+.pick p { margin: 3px 0 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.6; }
+
 /* ── 체크리스트 ────────────────────────────────────────────────── */
 .file-picked-list { list-style: none; margin: 10px 0 0; padding: 0; }
 .file-picked-list li {
