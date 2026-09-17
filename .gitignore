@@ -16,3 +16,6 @@ build/
 # OS / 에디터
 .DS_Store
 .vscode/
+
+# Claude Code 개인 설정 (승인 없이 git 명령 실행 허용)
+.claude/settings.local.json
