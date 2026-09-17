@@ -25,9 +25,15 @@ API로는 만들 수 없어서 DB에 직접 넣는 것.
                         예외)와 맞추려면 demo-mentor-a 같은 고정값이어야 한다 (guidelines 6-6).
   - 과거 시각          : API는 배정일·완료 시각·질문 시각을 "지금"으로 찍는다. 몇 주에 걸친
                         적응 과정을 보여주려면 이 시각들을 과거로 되돌려야 한다.
-  - 챗로그             : /chat/ask로 쌓으면 질문당 OpenAI 3회이고, LLM 분류에 따라 회사별로
-                        보여주려는 신호가 나온다는 보장이 없다. 리포트는 이 챗로그를 서버가
-                        그대로 읽어 계산하므로 신호 값은 실제 계산 결과다. (조장 확인, 9/14)
+  - 챗로그             : /chat/ask로 쌓으면 질문당 OpenAI 3회이고, LLM 분류·검색 결과에 따라
+                        회사별로 보여주려는 신호(어느 챕터로 귀속되는지)가 나온다는 보장이 없다.
+                        그래서 질문마다 챕터 귀속은 스토리대로 고정해서 DB에 직접 넣되, 답변
+                        텍스트만은 routers/chat.py의 generate_answer()(실제 챗봇과 같은 프롬프트)로
+                        LLM이 직접 쓰게 한다 — 문장 짜깁기(2글자 겹침 매칭)로는 질문 의도와
+                        안 맞는 답이 나왔었음(예: "어떻게 고쳐요?"에 "처음에 정확히 골라야 한다"로
+                        답함, 조장 확인 9/18). 검색(ChromaDB)은 안 타므로 임베딩 비용은 없고
+                        생성 호출 1회만 질문마다 발생. 리포트는 이 챗로그를 서버가 그대로 읽어
+                        계산하므로 신호 값은 실제 계산 결과다. (조장 확인, 9/14)
 
 ── 회사 구성 ───────────────────────────────────────────────────────────
 네 회사 모두 같은 틀이다: 사수 1명 + 신입 3명(대표 1명은 데모 로그인용 고정 ID, 추가 2명은 일반
@@ -400,18 +406,6 @@ def parse_file(path):
     return _parse_chapters_from_text(text, fallback_title=os.path.basename(path))
 
 
-def best_sentence(content: str, question: str) -> str:
-    """질문과 두 글자 조각이 가장 많이 겹치는 본문 문장 — 같은 업무 질문마다 같은 답이 반복되지 않게."""
-    sentences = [part.strip() + "다." for part in content.replace("\n", " ").split("다.") if part.strip()]
-
-    def grams(text):
-        text = text.replace(" ", "")
-        return {text[i:i + 2] for i in range(len(text) - 1)}
-
-    wanted = grams(question)
-    return max(sentences, key=lambda sentence: len(wanted & grams(sentence)))
-
-
 def build_logs(arch, take, by_role):
     """구간(phases)을 평일 단위로 풀어서 질문 로그를 만든다."""
     logs = []
@@ -442,9 +436,13 @@ def build_logs(arch, take, by_role):
                 logs.append({
                     "created_at": at(days_ago, hour),
                     "chapter_title": ch["title"],
+                    "chapter_content": ch["content"],
                     "question_type": qtype,
                     "question": question,
-                    "answer": f"인수인계서 '{ch['title']}'에 따르면, {best_sentence(ch['content'], question)}",
+                    # 점검(dry_run) 모드는 answer 텍스트를 안 읽는다(신호 계산엔 질문 유형·시각만
+                    # 쓰임). 실제로 DB에 들어가는 답변은 execute()가 chapter_content를 근거로
+                    # generate_answer()(routers/chat.py, 실제 챗봇과 같은 프롬프트)로 그때 만든다.
+                    "answer": None,
                     "answered": True,
                 })
     return sorted(logs, key=lambda log: log["created_at"])
@@ -540,7 +538,7 @@ def dry_run(companies, out_path):
     )
 
     exported = []
-    embed_calls = llm_calls = 0
+    embed_calls = llm_calls = chat_calls = 0
     for spec in companies:
         chapters, plans = build_plan(spec)
         # 점검용 가짜 chapter_id — 실제 업로드에서는 서버가 발급한다
@@ -549,6 +547,8 @@ def dry_run(companies, out_path):
         print(f"\n[{spec['key']}] {spec['company']} — 사수 {spec['mentor']}, 업무 {len(chapters)}개")
         for plan in plans:
             llm_calls += 4
+            # 답변이 있는 챗로그마다 generate_answer() 호출 1회 (execute() 참고)
+            chat_calls += sum(1 for log in plan["logs"] if log["answered"])
             logs = [
                 {"question_type": log["question_type"], "answered": log["answered"], "created_at": log["created_at"],
                  "matched_chapter_id": ids.get(log["chapter_title"])}
@@ -597,7 +597,8 @@ def dry_run(companies, out_path):
                               for i, c in enumerate(plan["checklist"])],
             })
 
-    print(f"\n예상 OpenAI 호출: 임베딩 {embed_calls}회(업로드 챕터 수) + 리포트 요약 LLM {llm_calls}회(신입당 4회)")
+    print(f"\n예상 OpenAI 호출: 임베딩 {embed_calls}회(업로드 챕터 수) + 챗로그 답변 생성 {chat_calls}회"
+          f" + 리포트 요약 LLM {llm_calls}회(신입당 4회)")
     if out_path:
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(exported, f, ensure_ascii=False)
@@ -676,6 +677,7 @@ def execute(companies, api_base):
     from models.chat import ChatLogORM
     from models.checklist import ChecklistItemORM
     from models.user import UserORM
+    from routers.chat import generate_answer
 
     api = Api(api_base)
     db = SessionLocal()
@@ -728,11 +730,18 @@ def execute(companies, api_base):
                         db.query(ChecklistItemORM).filter(ChecklistItemORM.item_id == item["item_id"]).update(
                             {"status": "done", "completed_at": c["completed_at"]})
 
-                # 6) 챗로그 — 과거 시각으로
+                # 6) 챗로그 — 과거 시각으로. 답변 텍스트는 실제 챗봇과 같은 프롬프트로 이제
+                # 막 LLM이 직접 쓴다(generate_answer, routers/chat.py) — 문장 짜깁기 대신이라
+                # 질문 의도와 안 맞는 답이 나오지 않는다. 어차피 챕터 귀속(matched_chapter_id)은
+                # 이 회사·신입 스토리대로 고정이라 리포트 신호에는 영향 없음.
                 for log in plan["logs"]:
+                    if log["answered"]:
+                        answered, answer = generate_answer(log["question"], log["chapter_content"])
+                    else:
+                        answered, answer = log["answered"], log["answer"]
                     db.add(ChatLogORM(
                         log_id=str(uuid.uuid4()), newcomer_id=nid, document_id=doc["document_id"],
-                        question=log["question"], answer=log["answer"], answered=log["answered"],
+                        question=log["question"], answer=answer, answered=answered,
                         matched_chapter_id=chapter_id.get(log["chapter_title"]),
                         question_type=log["question_type"], created_at=log["created_at"]))
                 db.commit()

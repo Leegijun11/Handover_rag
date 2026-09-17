@@ -98,29 +98,36 @@ def _node_search(state: ChatState) -> ChatState:
     return state
 
 
-def _node_generate(state: ChatState) -> ChatState:
-    hits = state["search_results"]
-    context = "\n\n".join(h["text"] for h in hits) if hits else ""
+def generate_answer(question: str, context: str) -> tuple[bool, str]:
+    """발췌(context)만 근거로 질문 하나에 답한다. (answered, answer) 반환.
+
+    seed_demo.py도 데모 챗로그의 답변 텍스트를 실제 챗봇과 똑같이 만들기 위해
+    이 함수를 그대로 재사용한다 — 프롬프트가 여기서만 관리되어야 두 군데가
+    따로 놀지 않는다.
+    """
     raw_answer = chat_complete(
         system_prompt=(
             "너는 신입사원 온보딩을 돕는 사내 챗봇이다. 아래 인수인계서 발췌 내용만 근거로 "
             "간결하고 정확하게 답변하라. 발췌 내용에 질문에 대한 답이 실제로 없으면, "
             f'다른 말 없이 정확히 "{NOT_FOUND_SENTINEL}" 라고만 답하라. 추측하거나 지어내지 마라.'
         ),
-        user_prompt=f"[인수인계서 발췌]\n{context}\n\n[질문]\n{state['question']}",
+        user_prompt=f"[인수인계서 발췌]\n{context}\n\n[질문]\n{question}",
     )
-
     if NOT_FOUND_SENTINEL in raw_answer:
-        state["answered"] = False
-        state["answer"] = NO_ANSWER_MESSAGE
-        # TODO(연동 필요 — 팀원 A): 4-1 요구사항은 "실패 시 챕터 제목 목록 중 LLM이
-        # 근접 추정"을 요구하지만, 챕터 제목 목록을 얻으려면 DocumentChapter 조회가
-        # 필요함. 지금은 "추정도 어려우면 None" 폴백으로 처리.
-        state["matched_chapter_id"] = None
-    else:
-        state["answered"] = True
-        state["answer"] = raw_answer
-        state["matched_chapter_id"] = hits[0]["chapter_id"] if hits else None
+        return False, NO_ANSWER_MESSAGE
+    return True, raw_answer
+
+
+def _node_generate(state: ChatState) -> ChatState:
+    hits = state["search_results"]
+    context = "\n\n".join(h["text"] for h in hits) if hits else ""
+    answered, answer = generate_answer(state["question"], context)
+    state["answered"] = answered
+    state["answer"] = answer
+    # TODO(연동 필요 — 팀원 A): 4-1 요구사항은 "실패 시 챕터 제목 목록 중 LLM이
+    # 근접 추정"을 요구하지만, 챕터 제목 목록을 얻으려면 DocumentChapter 조회가
+    # 필요함. 지금은 "추정도 어려우면 None" 폴백으로 처리.
+    state["matched_chapter_id"] = hits[0]["chapter_id"] if (answered and hits) else None
 
     state["question_type"] = _classify_question_type(state["question"])
     return state
