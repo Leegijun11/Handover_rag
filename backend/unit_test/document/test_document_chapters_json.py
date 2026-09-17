@@ -17,9 +17,10 @@ def test_valid_json_is_parsed_into_chapter_dicts():
 
     chapters = _parse_chapters_json(raw)
 
+    # 직접 입력 경로는 평면 구조라 level은 항상 1이다 (파일 업로드만 대분류·소분류를 나눈다)
     assert chapters == [
-        {"title": "채용 프로세스", "content": "본문1"},
-        {"title": "근로계약", "content": "본문2"},
+        {"title": "채용 프로세스", "content": "본문1", "level": 1, "fallback": False},
+        {"title": "근로계약", "content": "본문2", "level": 1, "fallback": False},
     ]
 
 

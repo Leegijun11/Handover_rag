@@ -51,12 +51,12 @@ def _chunk_text(text: str, chapter_title: str, chunk_size: int = 500, overlap: i
             current += (" " if current else "") + sentence
         else:
             if current:
-                chunks.append(f"[챕터: {chapter_title}] {current}")
+                chunks.append(f"[업무: {chapter_title}] {current}")
             overlap_text = current[-overlap:] if len(current) > overlap else current
             current = overlap_text + " " + sentence
 
     if current:
-        chunks.append(f"[챕터: {chapter_title}] {current}")
+        chunks.append(f"[업무: {chapter_title}] {current}")
 
     return chunks
 
@@ -69,8 +69,13 @@ _NUMBERED_RE = re.compile(r"^((?:\d+[-.])+\d*\.?|제\s*\d+\s*장)\s*(.+)$", re.M
 def _parse_chapters_from_text(text: str, fallback_title: str = "전체 내용") -> list[dict]:
     """파일 본문에서 챕터 구조를 자동 인식. 실패하면 문서 전체를 챕터 1개로 폴백.
 
-    인식 순서: 마크다운 헤더(#, ##) -> 숫자/장 넘버링 -> 둘 다 없으면 폴백.
-    반환값 각 원소는 {"title": str, "content": str, "fallback": bool}.
+    인식 순서: 마크다운 헤더(#, ##, ###) -> 숫자/장 넘버링(1., 1-1.) -> 둘 다 없으면 폴백.
+    반환값 각 원소는 {"title": str, "content": str, "level": int, "fallback": bool}.
+
+    level(대분류=1, 소분류=2 이상)로 저장 단계에서 parent_id 계층을 만든다. 본문 없는
+    상위(그룹핑용) 헤더도 챕터로 남긴다 — 걸러내면 "# 정산" 같은 대분류가 통째로 사라져서
+    체크리스트의 소분류 선택과 리포트의 업무 범위 점수가 소분류 개수 기준으로 어긋난다
+    (guidelines 2-3: content 없는 상위 챕터 허용, 청킹·초안 대상에서만 제외).
 
     fallback_title: 목차를 못 찾았을 때 쓸 제목. 파일을 여러 개 올릴 때(아래
     upload_document) 전부 "전체 내용"이면 어느 파일이 폴백됐는지 구분이 안 되므로,
@@ -85,16 +90,29 @@ def _parse_chapters_from_text(text: str, fallback_title: str = "전체 내용") 
         if len(matches) >= 2:
             chapters = []
             for i, m in enumerate(matches):
+                marker = m.group(1)
                 title = m.group(2).strip()
                 start = m.end()
                 end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
                 content = text[start:end].strip()
-                if content:
-                    chapters.append({"title": title, "content": content, "fallback": False})
+
+                if marker.startswith("#"):
+                    level = len(marker)
+                elif marker.startswith("제"):
+                    level = 1
+                else:
+                    level = marker.count("-") + 1  # "1." -> 1, "1-1." -> 2
+
+                chapters.append({
+                    "title": title,
+                    "content": content,
+                    "level": level,
+                    "fallback": False,
+                })
             if chapters:
                 return chapters
 
-    return [{"title": fallback_title, "content": text, "fallback": True}]
+    return [{"title": fallback_title, "content": text, "level": 1, "fallback": True}]
 
 
 class ChapterInput(BaseModel):
@@ -114,7 +132,8 @@ def _parse_chapters_json(chapters_raw: str) -> list[dict]:
     except (ValidationError, TypeError):
         raise HTTPException(status_code=400, detail="chapters 형식이 올바르지 않습니다 (title, content 필요)")
 
-    return [{"title": c.title, "content": c.content} for c in validated]
+    # 직접 입력 경로는 평면 구조 그대로 둔다 (팀원 A와 합의, 1차 빌드 범위 밖)
+    return [{"title": c.title, "content": c.content, "level": 1, "fallback": False} for c in validated]
 
 
 def _save_and_index_chapters(
@@ -124,25 +143,45 @@ def _save_and_index_chapters(
     chapters: list[dict],
     label: str,
 ) -> list[DocumentChapterORM]:
-    """챕터 저장 + mentor 매핑 기록 + 청킹->임베딩->ChromaDB 저장 (두 입력방식 공용)."""
+    """챕터 저장 + mentor 매핑 기록 + 청킹->임베딩->ChromaDB 저장 (두 입력방식 공용).
+
+    level이 1이 아닌 챕터는 가장 가까운 대분류를 parent_id로 잡는다 (3단 이상도 전부 가장
+    가까운 대분류에 붙인다 — 프론트가 대분류 직속 자식만 소분류 목록에 보여주기 때문).
+    본문 없는 그룹핑용 챕터는 MySQL에는 남기고 청킹·임베딩에서만 뺀다.
+    """
     chapter_rows = []
+    chapter_titles: dict[str, str] = {}  # chapter_id -> title (청크 접두사에 상위 업무명 넣기)
+    last_top_id: str | None = None
+
     for ch in chapters:
+        chapter_id = str(uuid.uuid4())
+        level = ch.get("level", 1)
         row = DocumentChapterORM(
-            chapter_id=str(uuid.uuid4()),
+            chapter_id=chapter_id,
             document_id=document_id,
             title=ch["title"],
-            parent_id=None,
+            parent_id=None if level == 1 else last_top_id,
             content=ch["content"],
         )
         db.add(row)
         chapter_rows.append(row)
+        chapter_titles[chapter_id] = ch["title"]
+        if level == 1:
+            last_top_id = chapter_id
 
     db.add(DocumentMentorMapORM(document_id=document_id, mentor_id=mentor_id, label=label))
     db.commit()
 
     collection = get_collection(document_id)
     for row, ch in zip(chapter_rows, chapters):
-        pieces = _chunk_text(row.content, row.title)
+        if not row.content:
+            continue  # 그룹핑용 상위 챕터(본문 없음)는 검색 대상이 아니다
+
+        # 상위 업무명을 접두사에 같이 넣는다 — "정산 마감 일정"만으로는 검색에서 맥락이 빠진다
+        display_title = (
+            f"{chapter_titles.get(row.parent_id, '')} > {row.title}" if row.parent_id else row.title
+        )
+        pieces = _chunk_text(row.content, display_title)
         vectors = _embed_texts(pieces)
         chunk_ids = [str(uuid.uuid4()) for _ in pieces]
         collection.add(

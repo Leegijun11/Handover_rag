@@ -13,7 +13,7 @@ def test_short_text_becomes_a_single_chunk():
     chunks = _chunk_text("짧은 문장입니다.", "테스트 챕터")
 
     assert len(chunks) == 1
-    assert chunks[0] == "[챕터: 테스트 챕터] 짧은 문장입니다."
+    assert chunks[0] == "[업무: 테스트 챕터] 짧은 문장입니다."
 
 
 def test_long_text_splits_into_multiple_chunks():
@@ -31,7 +31,7 @@ def test_every_chunk_is_tagged_with_chapter_title():
 
     assert len(chunks) > 1  # 여러 조각으로 나뉘었는지 먼저 확인 (안 나뉘면 아래 검증이 무의미)
     for chunk in chunks:
-        assert chunk.startswith("[챕터: 법인카드 정산]")
+        assert chunk.startswith("[업무: 법인카드 정산]")
 
 
 def test_overlap_repeats_tail_of_previous_chunk():
@@ -41,9 +41,9 @@ def test_overlap_repeats_tail_of_previous_chunk():
     chunks = _chunk_text(text, "T", chunk_size=15, overlap=5)
 
     assert len(chunks) >= 2
-    # 접두사("[챕터: T] ")를 뗀 실제 본문끼리 비교
-    first_body = chunks[0].removeprefix("[챕터: T] ")
-    second_body = chunks[1].removeprefix("[챕터: T] ")
+    # 접두사("[업무: T] ")를 뗀 실제 본문끼리 비교
+    first_body = chunks[0].removeprefix("[업무: T] ")
+    second_body = chunks[1].removeprefix("[업무: T] ")
     tail_of_first = first_body[-5:]
     assert second_body.startswith(tail_of_first)
 

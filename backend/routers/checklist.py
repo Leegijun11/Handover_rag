@@ -64,6 +64,16 @@ def _get_assignment(db: Session, newcomer_id: str):
     return get_assignment_by_newcomer(db, newcomer_id)
 
 
+def _require_owner_mentor(db: Session, current_user: CurrentUser, newcomer_id: str) -> None:
+    """이 신입의 담당 사수가 current_user인지 검증 (3-9 소유권 규칙).
+    수정·삭제·순서변경 전부 공용으로 사용."""
+    assignment = _get_assignment(db, newcomer_id)
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="배정된 인수인계서가 없습니다")
+    if assignment.mentor_id != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="담당 신입이 아닙니다")
+
+
 # ── API ──
 @router.post("/checklist", status_code=201)
 def save_checklist(
@@ -143,22 +153,18 @@ def update_checklist_item(
     if row is None:
         raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다")
 
-    assignment = _get_assignment(db, row.newcomer_id)
-    if assignment is None:
-        raise HTTPException(status_code=404, detail="배정된 인수인계서가 없습니다")
-    if assignment.mentor_id != current_user["user_id"]:
-        raise HTTPException(status_code=403, detail="담당 신입이 아닙니다")
+    _require_owner_mentor(db, current_user, row.newcomer_id)
 
-    new_chapter_id = payload.chapter_id if payload.chapter_id is not None else row.chapter_id
-    if new_chapter_id is not None:
+    if payload.chapter_id is not None:
+        assignment = _get_assignment(db, row.newcomer_id)
         from models.document import DocumentChapterORM
 
         chapter = (
             db.query(DocumentChapterORM)
-            .filter_by(chapter_id=new_chapter_id)
+            .filter_by(chapter_id=payload.chapter_id)
             .first()
         )
-        if chapter is None or chapter.document_id != assignment.document_id:
+        if chapter is None or (assignment is not None and chapter.document_id != assignment.document_id):
             raise HTTPException(status_code=400, detail="배정된 문서의 챕터가 아닙니다")
 
     if payload.title is not None:
@@ -180,6 +186,8 @@ def reorder_checklist_item(
     row = db.query(ChecklistItemORM).filter(ChecklistItemORM.item_id == item_id).first()
     if row is None:
         raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다")
+
+    _require_owner_mentor(db, current_user, row.newcomer_id)
 
     row.order = payload.order
     db.commit()
@@ -215,6 +223,8 @@ def delete_checklist_item(
     row = db.query(ChecklistItemORM).filter(ChecklistItemORM.item_id == item_id).first()
     if row is None:
         raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다")
+
+    _require_owner_mentor(db, current_user, row.newcomer_id)
 
     db.delete(row)
     db.commit()

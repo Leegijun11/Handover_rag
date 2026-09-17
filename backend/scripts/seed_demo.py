@@ -579,8 +579,18 @@ def dry_run(companies, out_path):
                 },
                 "chatLogs": [{"at": iso(log["created_at"]), "type": log["question_type"]}
                              for log in plan["logs"]],
-                "chapters": [{"chapter_id": ids[ch["title"]], "title": ch["title"], "parent_id": None}
-                             for ch in chapters],
+                "chapters": [
+                    {
+                        "chapter_id": ids[ch["title"]],
+                        "title": ch["title"],
+                        # 대분류(level 1)는 부모가 없고, 소분류는 바로 앞 대분류에 붙는다 —
+                        # 서버(document.py)가 저장하는 방식과 같게 맞춰야 점수 검증이 의미 있다
+                        "parent_id": None if ch.get("level", 1) == 1 else ids[
+                            next(t["title"] for t in reversed(chapters[: i]) if t.get("level", 1) == 1)
+                        ],
+                    }
+                    for i, ch in enumerate(chapters)
+                ],
                 "checklist": [{"title": c["title"], "chapter_id": ids[c["chapter_title"]],
                                "status": "done" if c["completed_at"] else "pending",
                                "completed_at": iso(c["completed_at"]), "order": i + 1}

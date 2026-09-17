@@ -57,3 +57,36 @@ def test_empty_text_is_rejected():
         _parse_chapters_from_text("   ")  # 공백만 있는 경우도 빈 것으로 취급
 
     assert exc_info.value.status_code == 400
+
+
+def test_two_level_headers_keep_depth_and_empty_group_chapters():
+    """대분류 아래 소분류가 오면 계층 정보(level)가 남아야 하고, 본문 없는 대분류도 살아야 한다.
+
+    이게 깨지면 리포트의 업무 범위 점수가 대분류가 아니라 소분류 개수로 계산되고(점수가
+    구조적으로 낮아짐), 체크리스트 관리 화면의 소분류 선택이 영원히 비어 있게 된다 — 9/17에
+    실제로 그 상태였다.
+    """
+    text = "# 정산\n## 정산 마감 일정\n마감은 매월 15일이다.\n\n## 정산 예외 처리\n예외는 따로 적는다.\n\n# 반품\n## 반품 처리\n회수부터 확인한다."
+    chapters = _parse_chapters_from_text(text)
+
+    titles = [(c["title"], c["level"]) for c in chapters]
+    assert titles == [
+        ("정산", 1),
+        ("정산 마감 일정", 2),
+        ("정산 예외 처리", 2),
+        ("반품", 1),
+        ("반품 처리", 2),
+    ]
+    # 대분류 "정산"은 바로 아래에 소분류가 와서 본문이 비지만, 목록에서 사라지면 안 된다
+    assert chapters[0]["content"] == ""
+
+
+def test_numbered_sub_items_are_second_level():
+    text = "1. 배차\n당일 물량 기준.\n\n1-1. 당일 배차 절차\n오전 9시에 받는다.\n\n2. 사고 대응\n먼저 보고한다."
+    chapters = _parse_chapters_from_text(text)
+
+    assert [(c["title"], c["level"]) for c in chapters] == [
+        ("배차", 1),
+        ("당일 배차 절차", 2),
+        ("사고 대응", 1),
+    ]
