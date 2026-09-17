@@ -631,6 +631,8 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
 .rpt-score-label .chip { margin-left: 8px; vertical-align: 1px; }
 
 .rpt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rpt-table tr.muted-row td { color: var(--text-faint); }
+.rpt-table .chip { margin-left: 6px; }
 .rpt-table th {
   text-align: left; font-size: 11.5px; font-weight: 600; color: var(--text-muted);
   background: none; padding: 8px 6px; border-bottom: 1px solid var(--text);

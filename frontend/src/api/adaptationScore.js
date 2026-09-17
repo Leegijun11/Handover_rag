@@ -26,7 +26,7 @@ export const SCORE_AXES = [
   {
     key: "coverage",
     label: "업무 범위",
-    formula: "질문이 닿은 대분류 ÷ 전체 대분류",
+    formula: "질문이 닿은 업무 ÷ 전체 업무 (소분류가 있으면 대분류 단위로 묶어서 셈)",
     meaning: "문서를 고르게 보고 있는지",
     strength: "문서의 여러 업무를 고르게 살펴보고 있습니다.",
     concern: "질문이 일부 업무에만 몰려 있습니다.",
@@ -121,6 +121,9 @@ export function computeAdaptationScore(report, chapters, checklist, chatTimes) {
   // 소분류에 달린 질문은 그 대분류로 묶어서 센다.
   const parentOf = new Map(chapters.map((c) => [c.chapter_id, c.parent_id || c.chapter_id]));
   const tops = new Set(chapters.filter((c) => !c.parent_id).map((c) => c.chapter_id));
+  // 문서에 소분류가 실제로 있을 때만 "대분류"라고 부른다 — 계층이 없는 문서에서 모든 업무를
+  // 대분류라고 적으면 사수가 문서 구조를 잘못 이해한다.
+  const hasDepth = tops.size !== chapters.length;
   const touched = new Set(
     Object.keys(heat)
       .map((id) => parentOf.get(id) || id)
@@ -158,7 +161,7 @@ export function computeAdaptationScore(report, chapters, checklist, chatTimes) {
   // 점수 옆에 붙이는 근거 숫자 — 표본이 작으면(완료 2개 등) 점수를 그만큼 가볍게 읽게 한다.
   const basis = {
     depth: `질문 ${questions}건 기준`,
-    coverage: `대분류 ${tops.size}개 중 ${touched.size}개`,
+    coverage: `${hasDepth ? "대분류" : "업무"} ${tops.size}개 중 ${touched.size}개`,
     alignment: `완료 ${done.length}개 기준`,
     consistency: workdays
       ? `활동 ${activeDays.size}일 · 기대 ${expectedDays}일 (평일 ${workdays}일의 60%)`

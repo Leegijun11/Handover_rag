@@ -243,6 +243,14 @@ function ChecklistManagePage() {
   }
 
   async function handleDelete(item) {
+    // 삭제는 행 자체를 지운다(soft delete 없음). 완료로 체크된 항목이면 "언제 완료했다"는
+    // 기록까지 함께 사라지고, 이미 만들어둔 리포트의 진행도·이해 일치도도 현재 체크리스트로
+    // 다시 계산되기 때문에 과거 점수가 바뀐다. 눌러서 알 수 있는 일이 아니라 미리 알린다.
+    const warning =
+      item.status === "done"
+        ? `'${item.title}'을(를) 삭제하면 완료 기록도 함께 지워지고, 이미 만든 리포트의 진행도 점수도 바뀝니다. 삭제할까요?`
+        : `'${item.title}'을(를) 삭제할까요? 신입 화면에서도 바로 사라집니다.`;
+    if (!window.confirm(warning)) return;
     setBusy(true);
     setError("");
     try {

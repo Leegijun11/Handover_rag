@@ -104,25 +104,43 @@ function MetricEvidence({ axisKey, report, previousReport, chapters, checklist, 
     if (!gaps.length) {
       return <div className="empty" style={{ padding: 16 }}>완료 후 다시 물은 항목 없음</div>;
     }
+    // 이 표는 리포트를 만들던 시점의 기록이고 점수는 현재 체크리스트로 계산한다. 그 사이에
+    // 사수가 항목을 지우거나 제목을 바꿨으면 둘이 어긋나므로, 어긋난 줄을 표시해준다.
+    const titles = new Set((checklist || []).map((item) => item.title));
+    const stale = gaps.filter((gap) => !titles.has(gap.title)).length;
     return (
-      <table className="rpt-table">
-        <thead>
-          <tr>
-            <th>완료 체크한 항목</th>
-            <th className="num">완료 후 질문</th>
-          </tr>
-        </thead>
-        <tbody>
-          {gaps.map((gap, index) => (
-            <tr key={`${gap.title}-${index}`}>
-              <td>{gap.title}</td>
-              <td className={`num ${gap.question_count_after_complete >= 2 ? "warn" : ""}`}>
-                {gap.question_count_after_complete}건
-              </td>
+      <>
+        <table className="rpt-table">
+          <thead>
+            <tr>
+              <th>완료 체크한 항목</th>
+              <th className="num">완료 후 질문</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {gaps.map((gap, index) => {
+              const missing = !titles.has(gap.title);
+              return (
+                <tr key={`${gap.title}-${index}`} className={missing ? "muted-row" : undefined}>
+                  <td>
+                    {gap.title}
+                    {missing && <span className="chip chip-none">지금은 없는 항목</span>}
+                  </td>
+                  <td className={`num ${gap.question_count_after_complete >= 2 ? "warn" : ""}`}>
+                    {gap.question_count_after_complete}건
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {stale > 0 && (
+          <p className="evidence-note">
+            리포트를 만든 뒤 삭제되거나 제목이 바뀐 항목 {stale}개가 있습니다. 점수는 현재
+            체크리스트로 계산하므로 위 기록과 다를 수 있습니다.
+          </p>
+        )}
+      </>
     );
   }
 
