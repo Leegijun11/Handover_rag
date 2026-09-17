@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 /**
  * 리포트 시각화 (사수 전용).
  *
@@ -305,15 +307,13 @@ export function ShareBar({ entries }) {
 }
 
 /* ── 날짜별 활동 달력 ─────────────────────────────────────────────
-   "손을 놓지 않고 붙어 있는가"는 막대 높이보다 "어느 날에 들어왔나"가 답이다. 그래서 막대그래프
-   대신 달력으로 그린다 — 날짜가 전부 적히고, 활동이 없는 날이 빈칸으로 남아 조용해진 구간이
-   바로 보인다. 칸 색은 그날 질문 수, 오른쪽 위 점은 그날 체크리스트를 완료했다는 표시다. */
+   "손을 놓지 않고 붙어 있는가"는 막대 높이보다 "어느 날에 들어왔나"가 답이다. 그래서 흔한 월별
+   달력으로 그린다 — 신입마다 배정일이 달라도 달력의 틀(1일부터 말일까지)은 같아서 서로 비교할 수
+   있고, 화살표로 달을 옮겨가며 볼 수 있다. 칸 색은 그날 질문 수, 왼쪽 위 체크는 그날 체크리스트를
+   완료했다는 표시다. 배정 전이나 리포트 기간 뒤의 날짜는 흐리게 둔다. */
 
 const DAY = 86400000;
 const WEEKDAY_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
-// 배정한 지 오래된 신입은 기간이 길어 달력이 끝없이 늘어난다. 끊긴 구간은 최근 쪽에서 보이므로
-// 뒤에서부터 이만큼만 그리고, 잘렸다는 사실을 캡션에 적는다.
-const MAX_WEEKS = 8;
 
 function localMidnight(date) {
   const d = new Date(date);
@@ -323,14 +323,22 @@ function localMidnight(date) {
 
 /** 월요일 시작으로 맞춘 요일 번호 (월 0 … 일 6) */
 const weekdayIndex = (date) => (date.getDay() + 6) % 7;
+const monthIndex = (date) => date.getFullYear() * 12 + date.getMonth();
+const monthStart = (index) => new Date(Math.floor(index / 12), index % 12, 1);
 
 export function ActivityCalendar({ questionTimes, doneTimes, start, end }) {
-  if (!start || !end) return null;
+  const first = start ? localMidnight(start) : null;
+  const last = end ? localMidnight(end) : null;
+  // 기본은 리포트 기간이 끝나는 달 — 최근 상황부터 보게 한다.
+  const [month, setMonth] = useState(() => (last ? monthIndex(last) : 0));
 
-  const first = localMidnight(start);
-  const last = localMidnight(end);
+  if (!first || !last) return null;
+
+  const firstMonth = monthIndex(first);
+  const lastMonth = monthIndex(last);
+  const shown = Math.min(Math.max(month, firstMonth), lastMonth);
+
   const key = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-
   const questions = new Map();
   const dones = new Map();
   const tally = (map, times) =>
@@ -342,67 +350,83 @@ export function ActivityCalendar({ questionTimes, doneTimes, start, end }) {
   tally(questions, questionTimes);
   tally(dones, doneTimes);
 
-  // 첫 주의 월요일부터 마지막 주의 일요일까지 채운다 — 요일 열이 어긋나면 달력으로 안 읽힌다.
-  const gridStart = new Date(first.getTime() - weekdayIndex(first) * DAY);
-  const gridEnd = new Date(last.getTime() + (6 - weekdayIndex(last)) * DAY);
-  const allWeeks = [];
-  for (let cursor = gridStart; cursor <= gridEnd; cursor = new Date(cursor.getTime() + 7 * DAY)) {
-    allWeeks.push(
-      Array.from({ length: 7 }, (_, i) => {
-        const date = new Date(cursor.getTime() + i * DAY);
-        const inPeriod = date >= first && date <= last;
-        return {
-          date,
-          inPeriod,
-          questions: inPeriod ? questions.get(key(date)) || 0 : 0,
-          done: inPeriod ? dones.get(key(date)) || 0 : 0,
-        };
-      }),
-    );
+  // 그 달 1일이 낀 주의 월요일부터 말일이 낀 주의 일요일까지 — 요일 열이 어긋나면 달력으로 안 읽힌다.
+  const monthFirst = monthStart(shown);
+  const monthLast = new Date(monthFirst.getFullYear(), monthFirst.getMonth() + 1, 0);
+  const gridStart = new Date(monthFirst.getTime() - weekdayIndex(monthFirst) * DAY);
+  const gridEnd = new Date(monthLast.getTime() + (6 - weekdayIndex(monthLast)) * DAY);
+
+  const cells = [];
+  for (let d = gridStart; d <= gridEnd; d = new Date(d.getTime() + DAY)) {
+    const inMonth = d.getMonth() === monthFirst.getMonth();
+    const inPeriod = d >= first && d <= last;
+    cells.push({
+      date: d,
+      inMonth,
+      inPeriod,
+      questions: inPeriod ? questions.get(key(d)) || 0 : 0,
+      done: inPeriod ? dones.get(key(d)) || 0 : 0,
+    });
   }
-  const truncated = allWeeks.length > MAX_WEEKS;
-  const weeks = truncated ? allWeeks.slice(-MAX_WEEKS) : allWeeks;
-  const shownFrom = weeks[0].find((cell) => cell.inPeriod)?.date || first;
 
   const level = (count) => Math.min(count, 4); // 1,2,3,4+ 네 단계
   const md = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
-  const ymd = (d) => `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
-  // 달이 바뀌는 칸(매월 1일과 기간 첫날)은 "9/1"처럼 월을 같이 적어 어느 달인지 알 수 있게 한다.
-  const cellLabel = (date) =>
-    date.getDate() === 1 || date.getTime() === first.getTime() ? md(date) : `${date.getDate()}`;
+  const monthLabel = `${monthFirst.getFullYear()}년 ${monthFirst.getMonth() + 1}월`;
 
   return (
     <div className="cal">
-      <p className="cal-caption">
-        {`${ymd(shownFrom)} ~ ${ymd(last)}`}
-        {truncated && <span className="cal-caption-note">최근 {MAX_WEEKS}주만 표시</span>}
-      </p>
+      <div className="cal-bar">
+        <button
+          type="button"
+          className="cal-nav"
+          onClick={() => setMonth(shown - 1)}
+          disabled={shown <= firstMonth}
+          aria-label="이전 달"
+        >
+          ‹
+        </button>
+        <b>{monthLabel}</b>
+        <button
+          type="button"
+          className="cal-nav"
+          onClick={() => setMonth(shown + 1)}
+          disabled={shown >= lastMonth}
+          aria-label="다음 달"
+        >
+          ›
+        </button>
+        <span className="cal-range">
+          분석 기간 {md(first)} ~ {md(last)}
+        </span>
+      </div>
+
       <div className="cal-grid">
         {WEEKDAY_LABELS.map((label) => (
           <span className="cal-head" key={label}>
             {label}
           </span>
         ))}
-        {weeks.flat().map((cell) => {
-          const weekend = weekdayIndex(cell.date) >= 5;
+        {cells.map((cell) => {
           const classes = ["cal-cell"];
+          if (!cell.inMonth) classes.push("other-month");
           if (!cell.inPeriod) classes.push("out");
           else {
-            if (weekend) classes.push("weekend");
+            if (weekdayIndex(cell.date) >= 5) classes.push("weekend");
             if (cell.questions) classes.push(`lv${level(cell.questions)}`);
             if (cell.done) classes.push("done");
           }
           const title = cell.inPeriod
             ? `${md(cell.date)} 질문 ${cell.questions}건${cell.done ? ` · 체크리스트 완료 ${cell.done}개` : ""}`
-            : "";
+            : `${md(cell.date)} 분석 기간 밖`;
           return (
             <span className={classes.join(" ")} key={cell.date.getTime()} title={title}>
-              <b>{cellLabel(cell.date)}</b>
-              {cell.inPeriod && cell.questions > 0 && <i className="cal-num">{cell.questions}</i>}
+              <b>{cell.date.getDate()}</b>
+              {cell.questions > 0 && <i className="cal-num">{cell.questions}</i>}
             </span>
           );
         })}
       </div>
+
       <div className="chart-legend cal-legend">
         <span>
           <i className="cal-swatch lv0" /> 활동 없음

@@ -627,8 +627,16 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
 
 /* 날짜별 활동 달력 — 활동한 날과 조용한 날을 날짜째로 보여준다 */
 .cal { display: flex; flex-direction: column; gap: 10px; }
-.cal-caption { margin: 0; font-size: 12px; font-weight: 600; color: var(--text-muted); }
-.cal-caption-note { margin-left: 8px; font-weight: 400; color: var(--text-faint); }
+/* 달 이동 막대 */
+.cal-bar { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.cal-bar b { min-width: 86px; text-align: center; font-variant-numeric: tabular-nums; }
+.cal-nav {
+  width: 24px; height: 24px; border: 1px solid var(--border); border-radius: 6px;
+  background: #fff; color: var(--text-muted); font-size: 15px; line-height: 1; cursor: pointer;
+}
+.cal-nav:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
+.cal-nav:disabled { opacity: .35; cursor: default; }
+.cal-range { margin-left: auto; font-size: 12px; color: var(--text-faint); }
 .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 .cal-head {
   font-size: 11px; color: var(--text-faint); text-align: center; padding-bottom: 2px;
@@ -640,8 +648,9 @@ td .hint { font-size: 12px; color: var(--text-faint); margin: 2px 0 0; }
 }
 .cal-cell b { font-size: 11.5px; font-weight: 600; color: var(--text-faint); }
 .cal-cell.weekend { background: #f7f8fa; }
-.cal-cell.out { background: transparent; }
-.cal-cell.out b { opacity: .25; }
+.cal-cell.out { background: #fafbfc; }
+.cal-cell.out b { opacity: .35; }
+.cal-cell.other-month b { opacity: .25; }
 .cal-cell.lv1 { background: #dfe9fc; }
 .cal-cell.lv2 { background: #b3cbf8; }
 .cal-cell.lv3 { background: #6f9cf0; }
