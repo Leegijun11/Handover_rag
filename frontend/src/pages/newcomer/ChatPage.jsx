@@ -24,6 +24,13 @@ const MAX_QUESTION_LENGTH = 500; // guidelines 5-9 항목 2
 const RATE_LIMIT_COOLDOWN_SECONDS = 60; // 사용자별 제한이 분당 10회라 1분 쉬면 풀린다
 const MAX_SUGGESTIONS = 3;
 
+/** 마지막 글자의 받침 유무로 주제 조사(은/는)를 고른다. 한글이 아니면 '는'. */
+function topicParticle(word) {
+  const code = word.trim().slice(-1).charCodeAt(0);
+  if (code < 0xac00 || code > 0xd7a3) return "는";
+  return (code - 0xac00) % 28 === 0 ? "는" : "은";
+}
+
 function ChatPage() {
   const user = getCurrentUser();
   const newcomerId = user?.user_id;
@@ -146,7 +153,8 @@ function ChatPage() {
       .filter((item) => item.status !== "done" && item.chapter_id)
       .forEach((item) => {
         const chapter = chapterOf(item.chapter_id);
-        if (chapter) add(`${chapter.title}은 어떻게 하나요?`, "아직 완료하지 않은 할 일");
+        // 받침 유무로 은/는을 고른다 ("파손 사고 처리은" 같은 조사 오류 방지)
+        if (chapter) add(`${chapter.title}${topicParticle(chapter.title)} 어떻게 하나요?`, "아직 완료하지 않은 할 일");
       });
 
     // 3) 한 번도 질문해본 적 없는 업무
