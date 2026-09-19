@@ -670,9 +670,26 @@ def wipe_company(db, key):
     db.commit()
 
 
-def execute(companies, api_base):
+def make_session(db_url: str | None):
+    """세션 공장. --db-url을 주면 그 DB에, 안 주면 .env의 로컬 DB에 쓴다.
+
+    이 스크립트는 API만 쓰는 게 아니라 고정 ID 계정·챗로그·과거 시각을 DB에 직접 넣는다.
+    그래서 배포 서버를 채울 때 --api만 바꾸면 계정·문서는 배포 DB에, 챗로그는 내 로컬 DB에
+    들어가 반쪽짜리가 된다. 배포 DB 주소를 같이 받아야 한 곳에 모인다.
+    """
+    if not db_url:
+        from core.database import SessionLocal
+
+        return SessionLocal
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    return sessionmaker(autocommit=False, autoflush=False, bind=create_engine(db_url, pool_pre_ping=True))
+
+
+def execute(companies, api_base, db_url=None):
     from core.auth import hash_password
-    from core.database import SessionLocal
     from models.assignment import AssignmentORM
     from models.chat import ChatLogORM
     from models.checklist import ChecklistItemORM
@@ -680,7 +697,7 @@ def execute(companies, api_base):
     from routers.chat import generate_answer
 
     api = Api(api_base)
-    db = SessionLocal()
+    db = make_session(db_url)()
     try:
         for spec in companies:
             key = spec["key"]
@@ -762,12 +779,18 @@ def main():
     parser.add_argument("--execute", action="store_true", help="실제로 넣는다 (OpenAI 과금 발생)")
     parser.add_argument("--only", choices=[c["key"] for c in COMPANIES], help="회사 한 곳만")
     parser.add_argument("--api", default=os.getenv("SEED_API_BASE", "http://localhost:8000"))
+    parser.add_argument(
+        "--db-url",
+        default=os.getenv("SEED_DB_URL"),
+        help="배포 DB에 넣을 때 그 DB 주소 (예: mysql+pymysql://user:pw@host:3306/db). "
+             "비우면 .env의 로컬 DB에 넣는다 — --api만 배포 서버로 바꾸면 데이터가 두 DB로 갈린다",
+    )
     parser.add_argument("--out", help="점검 모드: 리포트 화면 점수 검증용 JSON을 이 경로에 저장")
     args = parser.parse_args()
 
     companies = [c for c in COMPANIES if not args.only or c["key"] == args.only]
     if args.execute:
-        execute(companies, args.api)
+        execute(companies, args.api, args.db_url)
     else:
         dry_run(companies, args.out)
 
